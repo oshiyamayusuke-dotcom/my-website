@@ -1,0 +1,3879 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>営業売上分析ダッシュボード</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+.header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+  color: white;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  position: sticky; top: 0; z-index: 100;
+}
+.header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.year-sel {
+  background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+  color: white; padding: 6px 12px; border-radius: 8px; font-size: 14px;
+  cursor: pointer; font-family: inherit;
+}
+.year-sel option { background: #1a1a2e; color: white; }
+.file-badge {
+  background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+  padding: 5px 14px; border-radius: 20px; font-size: 12px; color: rgba(255,255,255,0.8);
+}
+
+.tabs {
+  background: white;
+  border-bottom: 2px solid #e8eaf0;
+  display: flex;
+  padding: 0 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.tab {
+  padding: 14px 18px; cursor: pointer; font-size: 14px; color: #777;
+  border-bottom: 3px solid transparent; transition: all 0.2s; font-weight: 500;
+  white-space: nowrap;
+}
+.tab:hover { color: #0066cc; background: #f8f9ff; }
+.tab.active { color: #0066cc; border-bottom-color: #0066cc; font-weight: 700; }
+
+.content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ---- Upload ---- */
+.upload-area {
+  display: block;
+  border: 2px dashed #0066cc; border-radius: 14px; padding: 32px 20px;
+  text-align: center; cursor: pointer; background: linear-gradient(135deg,#f8f9ff,#eef2ff);
+  transition: all 0.2s; margin-bottom: 20px;
+}
+.upload-area:hover, .upload-area.drag-over {
+  background: linear-gradient(135deg,#e8f0ff,#dde8ff); border-color: #004db3; transform: scale(1.005);
+}
+.upload-icon { font-size: 40px; margin-bottom: 10px; }
+.upload-text { font-size: 15px; color: #0066cc; font-weight: 700; margin-bottom: 4px; }
+.upload-sub { font-size: 12px; color: #999; }
+
+/* ---- Mapper ---- */
+.mapper-card {
+  background: #fffbf0; border: 1.5px solid #f59e0b; border-radius: 12px;
+  padding: 18px 20px; margin-bottom: 20px;
+}
+.mapper-title { font-size: 14px; font-weight: 700; color: #92400e; margin-bottom: 12px; }
+.mapper-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px; }
+
+/* ---- KPI Cards ---- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 14px; margin-bottom: 18px; }
+.kpi-card {
+  background: white; border-radius: 14px; padding: 18px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07); border-left: 5px solid #0066cc;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+.kpi-card.green { border-left-color: #00a86b; }
+.kpi-card.purple { border-left-color: #7c3aed; }
+.kpi-card.orange { border-left-color: #f59e0b; }
+
+.kpi-label { font-size: 12px; color: #888; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-value { font-size: 26px; font-weight: 800; color: #1a1a2e; margin-bottom: 3px; line-height: 1.1; }
+.kpi-sub { font-size: 12px; color: #888; margin-bottom: 10px; }
+.progress-wrap { background: #eef0f5; border-radius: 999px; height: 7px; overflow: hidden; }
+.progress-bar {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg,#0066cc,#33aaff);
+  transition: width 0.6s cubic-bezier(.4,0,.2,1);
+}
+.kpi-card.green .progress-bar { background: linear-gradient(90deg,#00a86b,#00d68f); }
+.kpi-card.purple .progress-bar { background: linear-gradient(90deg,#7c3aed,#a855f7); }
+.kpi-card.orange .progress-bar { background: linear-gradient(90deg,#f59e0b,#fbbf24); }
+.progress-labels { display:flex; justify-content:space-between; font-size:11px; color:#aaa; margin-top:4px; }
+
+/* ---- Charts ---- */
+.chart-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 18px; }
+.chart-card {
+  background: white; border-radius: 14px; padding: 18px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+}
+.chart-title { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; }
+
+/* ---- Tables ---- */
+.table-card {
+  background: white; border-radius: 14px; padding: 18px 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07); margin-bottom: 16px; overflow-x: auto;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  background: #f4f6fb; padding: 9px 12px; text-align: left;
+  font-weight: 700; color: #555; border-bottom: 2px solid #e0e4f0;
+  white-space: nowrap;
+}
+td { padding: 9px 12px; border-bottom: 1px solid #f0f2f8; color: #333; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f8f9ff; }
+.summary-row td { background: #f0f7ff !important; font-weight: 700; }
+
+.badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+.badge-green { background:#dcfce7; color:#166534; }
+.badge-yellow { background:#fef9c3; color:#854d0e; }
+.badge-red { background:#fee2e2; color:#991b1b; }
+
+/* ---- 年度切替トグル ---- */
+.view-toggle-bar { display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 16px; background:#f8f9ff; border-radius:10px; border:1px solid #e8eaf0; flex-wrap:wrap; }
+.view-toggle-lbl { font-size:12px; font-weight:700; color:#555; white-space:nowrap; }
+.view-toggle-btn { padding:6px 16px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; border:none; font-family:inherit; transition:all 0.2s; }
+.view-toggle-btn.active { background:#0066cc; color:white; box-shadow:0 2px 6px rgba(0,102,204,0.3); }
+.view-toggle-btn:not(.active) { background:#e8eaf0; color:#555; }
+.view-toggle-btn:not(.active):hover { background:#d0d5e8; }
+
+/* ---- Settings ---- */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.settings-card { background: white; border-radius: 14px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+.settings-title { font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #f0f2f8; }
+
+.form-group { margin-bottom: 14px; }
+.form-label { display:block; font-size:12px; font-weight:700; color:#555; margin-bottom:5px; }
+.form-input {
+  width: 100%; padding: 9px 12px; border: 1.5px solid #e0e4f0; border-radius: 8px;
+  font-size: 13px; transition: border-color 0.2s; font-family: inherit; background: white;
+}
+.form-input:focus { outline:none; border-color:#0066cc; box-shadow: 0 0 0 3px rgba(0,102,204,0.1); }
+select.form-input { cursor:pointer; }
+
+.monthly-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+
+.btn {
+  padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: none; font-family: inherit; transition: all 0.2s;
+}
+.btn-primary { background: #0066cc; color: white; }
+.btn-primary:hover { background: #0050a3; transform: translateY(-1px); }
+.btn-success { background: #00a86b; color: white; }
+.btn-success:hover { background: #008a57; }
+.btn-gray { background: #f0f2f8; color: #555; }
+.btn-gray:hover { background: #e0e4f0; }
+
+/* ---- Empty ---- */
+.empty-state { text-align:center; padding:60px 20px; color:#aaa; }
+.empty-icon { font-size:60px; margin-bottom:14px; }
+.empty-text { font-size:16px; font-weight:700; margin-bottom:6px; color:#888; }
+.empty-sub { font-size:13px; }
+
+/* ---- Search ---- */
+.search-bar { padding:8px 12px; border:1.5px solid #e0e4f0; border-radius:8px; font-size:13px; font-family:inherit; width:200px; }
+.search-bar:focus { outline:none; border-color:#0066cc; }
+
+.section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.text-right { text-align:right !important; }
+
+/* ---- 得意先クリック行 ---- */
+tr.cust-row { cursor: pointer; }
+tr.cust-row:hover td { background: #eef4ff !important; }
+tr.cust-row td:last-child { color: #0066cc; font-size: 16px; opacity: 0; transition: opacity 0.15s; }
+tr.cust-row:hover td:last-child { opacity: 1; }
+
+/* ---- 詳細ビューヘッダー ---- */
+.detail-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px 20px;
+  background: white; border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+  flex-wrap: wrap;
+}
+.btn-back {
+  padding: 8px 18px; background: #f0f2f8; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+  color: #555; transition: all 0.2s; white-space: nowrap;
+}
+.btn-back:hover { background: #e0e4f0; color: #0066cc; }
+.detail-cust-name {
+  font-size: 20px; font-weight: 800; color: #1a1a2e; flex: 1;
+  min-width: 120px;
+}
+.btn-nav {
+  padding: 8px 16px; background: #eef4ff; border: 1.5px solid #c7d9f8;
+  border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+  font-family: inherit; color: #0066cc; transition: all 0.2s; white-space: nowrap;
+}
+.btn-nav:hover:not(:disabled) { background: #dbeafe; border-color: #93c5fd; }
+.btn-nav:disabled { opacity: 0.35; cursor: default; }
+.cust-nav-counter {
+  font-size: 13px; color: #888; font-weight: 600; white-space: nowrap;
+  background: #f4f6fb; padding: 6px 14px; border-radius: 20px;
+}
+.cust-memo-wrap {
+  display: flex; align-items: flex-start; gap: 8px; flex: 0 0 auto;
+}
+.cust-memo {
+  padding: 7px 12px; border: 1.5px solid #e0e4f0; border-radius: 8px;
+  font-size: 13px; font-family: inherit; color: #333; background: #fafbff;
+  width: 420px; transition: border-color 0.2s; resize: both; line-height: 1.5;
+  min-width: 180px; max-width: 700px;
+}
+.cust-memo:focus { outline: none; border-color: #0066cc; box-shadow: 0 0 0 3px rgba(0,102,204,0.1); background: #fff; }
+.cust-memo::placeholder { color: #bbb; }
+.memo-saved-badge {
+  font-size: 11px; color: #00a86b; font-weight: 700; white-space: nowrap;
+  opacity: 0; transition: opacity 0.3s;
+}
+
+/* ---- 比較表 得意先メモ ---- */
+.mtx-memo {
+  width: 100%; margin-top: 6px; min-height: 40px; padding: 5px 7px;
+  border: 1px solid #e0e4f0; border-radius: 6px; font-size: 11px;
+  font-family: inherit; color: #333; background: #fafbff; resize: vertical;
+  line-height: 1.4; font-weight: 400;
+}
+.mtx-memo:focus { outline: none; border-color: #0066cc; background: #fff; box-shadow: 0 0 0 2px rgba(0,102,204,0.1); }
+.mtx-memo::placeholder { color: #bbb; }
+
+@media(max-width:900px){
+  .chart-grid { grid-template-columns:1fr; }
+  .settings-grid { grid-template-columns:1fr; }
+  .monthly-grid { grid-template-columns:repeat(3,1fr); }
+  .kpi-grid { grid-template-columns:1fr 1fr; }
+}
+@media(max-width:560px){
+  .kpi-grid { grid-template-columns:1fr 1fr; }
+  .monthly-grid { grid-template-columns:repeat(2,1fr); }
+  .content { padding:12px; }
+}
+
+/* ===== MOBILE-FIRST 再構成（スマホ基準） ===== */
+:root{ --mobile-max: 480px; }
+body{ background:#e9ebf0; }
+.app-frame{ max-width:var(--mobile-max); margin:0 auto; min-height:100vh; background:#f0f2f5; box-shadow:0 0 24px rgba(0,0,0,0.08); position:relative; overflow-x:hidden; }
+.header{ max-width:var(--mobile-max); margin:0 auto; padding:10px 14px; }
+.header h1{ font-size:15px; }
+.header-right{ gap:8px; }
+.year-sel{ padding:5px 8px; font-size:13px; }
+.file-badge{ font-size:11px; padding:4px 10px; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tabs{ display:none !important; }
+.content{ padding:12px 12px calc(78px + env(safe-area-inset-bottom,0px)); max-width:var(--mobile-max); }
+.kpi-grid{ grid-template-columns:1fr 1fr; gap:10px; }
+.kpi-card{ padding:13px 14px; }
+.kpi-value{ font-size:20px; }
+.kpi-label{ font-size:10px; }
+.kpi-sub{ font-size:11px; }
+.chart-grid{ grid-template-columns:1fr !important; gap:12px; }
+.chart-card{ padding:14px; }
+.table-card{ padding:12px; }
+table{ font-size:12px; }
+th,td{ padding:7px 9px; }
+.cust-memo{ width:100%; max-width:100%; min-width:0; }
+.detail-cust-name{ font-size:17px; min-width:0; }
+.settings-grid{ grid-template-columns:1fr !important; }
+.insights-list{ grid-template-columns:1fr; }
+.mapper-grid{ grid-template-columns:1fr 1fr; }
+.detail-header, .view-toggle-bar{ flex-wrap:wrap; gap:8px; }
+.mnav{ position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:var(--mobile-max); z-index:200; background:#fff; border-top:1px solid #e3e6ef; display:flex; justify-content:space-around; align-items:stretch; padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px)); box-shadow:0 -4px 16px rgba(0,0,0,0.08); }
+.mnav-item{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px 2px; cursor:pointer; border:none; background:none; color:#8890a4; font-family:inherit; font-size:10px; font-weight:700; border-radius:10px; transition:color .15s, background .15s; }
+.mnav-item .mnav-ico{ font-size:19px; line-height:1; }
+.mnav-item.active{ color:#0066cc; background:#eef4ff; }
+.mnav-item:active{ background:#e3ecff; }
+.sheet-overlay{ position:fixed; inset:0; z-index:300; background:rgba(20,24,40,0.45); opacity:0; pointer-events:none; transition:opacity .22s; }
+.sheet-overlay.open{ opacity:1; pointer-events:auto; }
+.nav-sheet{ position:fixed; left:50%; transform:translateX(-50%) translateY(100%); bottom:0; width:100%; max-width:var(--mobile-max); z-index:301; background:#fff; border-radius:20px 20px 0 0; padding:10px 16px calc(24px + env(safe-area-inset-bottom,0px)); box-shadow:0 -8px 30px rgba(0,0,0,0.2); transition:transform .26s cubic-bezier(.4,0,.2,1); }
+.nav-sheet.open{ transform:translateX(-50%) translateY(0); }
+.sheet-handle{ width:40px; height:4px; border-radius:99px; background:#d4d8e4; margin:4px auto 12px; }
+.sheet-title{ font-size:13px; font-weight:800; color:#555; margin-bottom:10px; padding-left:4px; }
+.sheet-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.sheet-item{ display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 6px; border-radius:14px; background:#f6f8fc; border:1.5px solid transparent; cursor:pointer; font-family:inherit; font-size:11px; font-weight:700; color:#444; text-align:center; }
+.sheet-item .sheet-ico{ font-size:22px; }
+.sheet-item.active{ background:#eef4ff; border-color:#0066cc; color:#0066cc; }
+.sheet-item:active{ background:#e3ecff; }
+
+/* ---- AI気付きパネル ---- */
+.insights-card {
+  background: linear-gradient(135deg,#fffdf5,#fff7e8);
+  border: 1.5px solid #f5c451; border-radius: 14px;
+  padding: 16px 20px; margin-bottom: 18px;
+  box-shadow: 0 2px 10px rgba(245,158,11,0.12);
+}
+.insights-head { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.insights-head .ttl { font-size:15px; font-weight:800; color:#92400e; }
+.insights-head .sub { font-size:11px; color:#b78a3a; font-weight:600; }
+.insights-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:8px; }
+.insight-item {
+  display:flex; align-items:flex-start; gap:9px; background:#fff;
+  border-radius:10px; padding:10px 13px; font-size:13px; line-height:1.5;
+  border-left:4px solid #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+.insight-item .insight-ico { font-size:17px; line-height:1.3; flex:0 0 auto; }
+.insight-item b { color:#1a1a2e; }
+.insight-good { border-left-color:#00a86b; }
+.insight-warn { border-left-color:#ef4444; }
+.insight-info { border-left-color:#0066cc; }
+</style>
+</head>
+<body>
+<div class="app-frame">
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <h1>📊 営業売上分析ダッシュボード</h1>
+  <div class="header-right">
+    <select class="year-sel" id="yearSelect" onchange="onYearChange()"></select>
+    <span class="file-badge" id="fileBadge">データ未読込</span>
+  </div>
+</div>
+
+<!-- ===== TABS ===== -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')">📈 ダッシュボード</div>
+  <div class="tab" onclick="switchTab('monthly')">📅 月別分析</div>
+  <div class="tab" onclick="switchTab('daily')">📆 日別分析</div>
+  <div class="tab" onclick="switchTab('customer')">🏢 得意先別</div>
+  <div class="tab" onclick="switchTab('dim')">🏭 分類別分析</div>
+  <div class="tab" onclick="switchTab('yearly')">📆 年度比較</div>
+  <div class="tab" onclick="switchTab('matrix')">📊 比較表</div>
+  <div class="tab" onclick="switchTab('ymatrix')">🗓 年度別表</div>
+  <div class="tab" onclick="switchTab('settings')">⚙️ 目標設定</div>
+</div>
+
+<div class="content">
+
+<!-- ============================================================ -->
+<!--  DASHBOARD TAB                                               -->
+<!-- ============================================================ -->
+<div class="tab-panel active" id="tab-dashboard">
+
+  <!-- Upload -->
+  <label class="upload-area" id="uploadArea" for="fileInput"
+       ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+    <div class="upload-icon">📂</div>
+    <div class="upload-text">CSV / Excel ファイルを選択（タップ）／PCではドロップも可</div>
+    <div class="upload-sub">対応形式: .csv / .xlsx / .xls &nbsp;|&nbsp; 毎回選び直せます（データは保存しません）</div>
+    <input type="file" id="fileInput" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;" onchange="handleFileSelect(event)">
+  </label>
+
+  <!-- Column Mapper -->
+  <div class="mapper-card" id="mapperCard" style="display:none">
+    <div class="mapper-title">⚠️ 列のマッピングを確認・修正してください</div>
+    <div class="mapper-grid" id="mapperGrid"></div>
+    <div style="margin-top:14px;">
+      <button class="btn btn-primary" onclick="applyMapping()">この設定で分析する</button>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div id="dashboardContent" style="display:none">
+    <!-- AI気付きパネル -->
+    <div class="insights-card" id="insightsCard">
+      <div class="insights-head">
+        <span style="font-size:18px;">💡</span>
+        <span class="ttl">今日の気付き</span>
+        <span class="sub" id="insightsSub"></span>
+      </div>
+      <div class="insights-list" id="insightsBody"></div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">📦 年間売上</div>
+        <div class="kpi-value" id="kpi-sales">¥0</div>
+        <div class="kpi-sub" id="kpi-sales-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="pb-sales-pct">—</span><span id="pb-sales-rem"></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 年間粗利</div>
+        <div class="kpi-value" id="kpi-gp">¥0</div>
+        <div class="kpi-sub" id="kpi-gp-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="pb-gp-pct">—</span><span id="pb-gp-rem"></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="kpi-gpr">0%</div>
+        <div class="kpi-sub" id="kpi-gpr-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">📅 今月の売上</div>
+        <div class="kpi-value" id="kpi-month">¥0</div>
+        <div class="kpi-sub" id="kpi-month-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="pb-month" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="pb-month-pct">—</span><span id="pb-month-rem"></span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f2f8;display:flex;justify-content:space-between;font-size:12px;">
+          <span style="color:#888;">今月粗利額</span>
+          <span style="font-weight:700;color:#00a86b;" id="kpi-month-gp">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Charts -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">月別 売上・粗利 推移（目標vs実績）</div>
+        <canvas id="chartMonthly" height="130"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">得意先別 売上 TOP10</div>
+        <canvas id="chartCustBar" height="230"></canvas>
+      </div>
+    </div>
+
+    <!-- Month Summary Table -->
+    <div class="table-card">
+      <div class="chart-title">月別サマリー</div>
+      <table>
+        <thead>
+          <tr>
+            <th>月</th>
+            <th class="text-right">売上目標</th>
+            <th class="text-right">売上実績</th>
+            <th class="text-right">達成率</th>
+            <th class="text-right">粗利実績</th>
+            <th class="text-right">粗利率</th>
+          </tr>
+        </thead>
+        <tbody id="tblSummary"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">📊</div>
+    <div class="empty-text">CSVファイルをアップロードして分析を開始</div>
+    <div class="empty-sub">売上データ（日付・得意先・売上金額・原価 or 粗利）が入ったCSVファイルを選択してください</div>
+  </div>
+
+</div><!-- /tab-dashboard -->
+
+<!-- ============================================================ -->
+<!--  MONTHLY TAB                                                 -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-monthly">
+
+  <!-- ===== 一覧ビュー ===== -->
+  <div id="monthListView">
+    <!-- KPI サマリー -->
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label">📦 年間売上</div>
+        <div class="kpi-value" id="ml-kpi-sales">¥0</div>
+        <div class="kpi-sub" id="ml-kpi-sales-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="ml-pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="ml-pb-sales-pct">—</span><span id="ml-pb-sales-rem"></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 年間粗利額</div>
+        <div class="kpi-value" id="ml-kpi-gp">¥0</div>
+        <div class="kpi-sub" id="ml-kpi-gp-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="ml-pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="ml-pb-gp-pct">—</span><span id="ml-pb-gp-rem"></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="ml-kpi-gpr">0%</div>
+        <div class="kpi-sub" id="ml-kpi-gpr-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="ml-pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="ml-pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">📅 今月売上</div>
+        <div class="kpi-value" id="ml-kpi-month">¥0</div>
+        <div class="kpi-sub" id="ml-kpi-month-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="ml-pb-month" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="ml-pb-month-pct">—</span><span></span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f2f8;display:flex;justify-content:space-between;font-size:12px;">
+          <span style="color:#888;">今月粗利額</span>
+          <span style="font-weight:700;color:#00a86b;" id="ml-kpi-month-gp">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="chart-title">月別 詳細分析　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックで月詳細表示</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>月</th>
+            <th class="text-right">売上目標</th>
+            <th class="text-right">売上実績</th>
+            <th class="text-right">達成率</th>
+            <th class="text-right">差額</th>
+            <th class="text-right">粗利目標</th>
+            <th class="text-right">粗利実績</th>
+            <th class="text-right">粗利達成率</th>
+            <th class="text-right">粗利率</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tblMonthly"></tbody>
+      </table>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">月別 売上 目標 vs 実績</div>
+      <canvas id="chartMonthlyBar" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- ===== 月詳細ビュー ===== -->
+  <div id="monthDetailView" style="display:none">
+    <!-- 戻る＋タイトル -->
+    <div class="detail-header">
+      <button class="btn-back" onclick="backToMonthList()">← 一覧に戻る</button>
+      <div class="detail-cust-name" id="detailMonthName"></div>
+    </div>
+
+    <!-- KPI カード -->
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label">📦 売上実績</div>
+        <div class="kpi-value" id="md-kpi-sales">¥0</div>
+        <div class="kpi-sub" id="md-kpi-sales-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="md-pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="md-pb-sales-pct">—</span><span id="md-pb-sales-rem"></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 粗利実績</div>
+        <div class="kpi-value" id="md-kpi-gp">¥0</div>
+        <div class="kpi-sub" id="md-kpi-gp-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="md-pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="md-pb-gp-pct">—</span><span id="md-pb-gp-rem"></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="md-kpi-gpr">0%</div>
+        <div class="kpi-sub" id="md-kpi-gpr-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="md-pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="md-pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">📋 取引件数</div>
+        <div class="kpi-value" id="md-kpi-cnt">0件</div>
+        <div class="kpi-sub" id="md-kpi-cnt-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="md-pb-cnt" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="md-pb-cnt-pct">—</span><span></span></div>
+      </div>
+    </div>
+
+    <!-- 得意先別チャート＋テーブル -->
+    <div class="chart-grid" style="margin-bottom:18px;">
+      <div class="chart-card">
+        <div class="chart-title" id="mdChartTitle">得意先別 売上</div>
+        <canvas id="chartMdCustBar" height="160"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">売上構成</div>
+        <canvas id="chartMdCustPie" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- 得意先テーブル -->
+    <div class="table-card">
+      <div class="chart-title" id="mdTableTitle">得意先別 明細</div>
+      <table>
+        <thead>
+          <tr>
+            <th>順位</th>
+            <th>得意先名</th>
+            <th class="text-right">売上金額</th>
+            <th class="text-right">構成比</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblMdCust"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!--  DAILY TAB                                                   -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-daily">
+
+  <!-- 対象月セレクタ -->
+  <div class="detail-header">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:13px;font-weight:700;color:#555;white-space:nowrap;">📆 対象月</span>
+      <select class="form-input" id="daySel" onchange="renderDaily()" style="width:auto;min-width:110px;padding:7px 12px;">
+      </select>
+    </div>
+    <div class="detail-cust-name" id="dailyTitle" style="font-size:16px;"></div>
+  </div>
+
+  <div id="dailyContent">
+    <!-- KPI カード -->
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label">🎯 月間売上目標</div>
+        <div class="kpi-value" id="dy-kpi-tgt">¥0</div>
+        <div class="kpi-sub" id="dy-kpi-tgt-sub">日割: —</div>
+        <div class="progress-wrap"><div class="progress-bar" id="dy-pb-tgt" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dy-pb-tgt-pct">—</span><span id="dy-pb-tgt-rem"></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">📦 当月売上（累計）</div>
+        <div class="kpi-value" id="dy-kpi-act">¥0</div>
+        <div class="kpi-sub" id="dy-kpi-act-sub">粗利: —</div>
+        <div class="progress-wrap"><div class="progress-bar" id="dy-pb-act" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dy-pb-act-pct">—</span><span id="dy-pb-act-cnt"></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📈 進捗ペース</div>
+        <div class="kpi-value" id="dy-kpi-pace">—</div>
+        <div class="kpi-sub" id="dy-kpi-pace-sub">本日あるべき額との差</div>
+        <div class="progress-wrap"><div class="progress-bar" id="dy-pb-pace" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dy-pb-pace-pct">—</span><span id="dy-pb-pace-exp"></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">🏃 残り必要ペース</div>
+        <div class="kpi-value" id="dy-kpi-req">¥0</div>
+        <div class="kpi-sub" id="dy-kpi-req-sub">残り —日 / 1日あたり</div>
+        <div class="progress-wrap"><div class="progress-bar" id="dy-pb-req" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dy-pb-req-pct">—</span><span id="dy-pb-req-rem"></span></div>
+      </div>
+    </div>
+
+    <!-- チャート -->
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div class="chart-title" id="dyCumTitle">累計売上 vs 目標ペース</div>
+      <canvas id="chartDailyCum" height="100"></canvas>
+    </div>
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div class="chart-title">日別 売上・粗利</div>
+      <canvas id="chartDailyBar" height="90"></canvas>
+    </div>
+
+    <!-- 日別テーブル -->
+    <div class="table-card">
+      <div class="chart-title">日別 明細</div>
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th class="text-right">売上</th>
+            <th class="text-right">累計売上</th>
+            <th class="text-right">目標ペース累計</th>
+            <th class="text-right">対ペース</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblDaily"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="empty-state" id="dailyEmpty"><div class="empty-icon">📆</div><div class="empty-text">CSVを読み込むと日別分析が表示されます</div></div>
+
+</div>
+
+<!-- ============================================================ -->
+<!--  CUSTOMER TAB                                                -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-customer">
+
+  <!-- ===== 一覧ビュー ===== -->
+  <div id="custListView">
+    <!-- KPI サマリー -->
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label">📦 年間売上</div>
+        <div class="kpi-value" id="cl-kpi-sales">¥0</div>
+        <div class="kpi-sub" id="cl-kpi-sales-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="cl-pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="cl-pb-sales-pct">—</span><span id="cl-pb-sales-rem"></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 年間粗利額</div>
+        <div class="kpi-value" id="cl-kpi-gp">¥0</div>
+        <div class="kpi-sub" id="cl-kpi-gp-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="cl-pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="cl-pb-gp-pct">—</span><span id="cl-pb-gp-rem"></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="cl-kpi-gpr">0%</div>
+        <div class="kpi-sub" id="cl-kpi-gpr-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="cl-pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="cl-pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">📅 今月売上</div>
+        <div class="kpi-value" id="cl-kpi-month">¥0</div>
+        <div class="kpi-sub" id="cl-kpi-month-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="cl-pb-month" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="cl-pb-month-pct">—</span><span></span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f2f8;display:flex;justify-content:space-between;font-size:12px;">
+          <span style="color:#888;">今月粗利額</span>
+          <span style="font-weight:700;color:#00a86b;" id="cl-kpi-month-gp">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 年度表示モード切替 -->
+    <div class="view-toggle-bar">
+      <span class="view-toggle-lbl">📊 表示モード：</span>
+      <button class="view-toggle-btn active" id="btnModeYear" onclick="switchCustViewMode('year')">📅 選択年度</button>
+      <button class="view-toggle-btn" id="btnModeMonths" onclick="switchCustViewMode('months')">📆 月比較</button>
+      <button class="view-toggle-btn" id="btnModeAllYears" onclick="switchCustViewMode('allyears')">🗓 全年度比較</button>
+      <span style="font-size:11px;color:#aaa;margin-left:4px;" id="custViewModeHint">選択中の会計年度のデータを表示</span>
+    </div>
+
+    <!-- 選択年度ビュー（既存） -->
+    <div id="custSingleYearView">
+      <div class="table-card">
+        <div class="section-header">
+          <div class="chart-title" style="margin-bottom:0">得意先別 売上分析　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックで詳細表示</span></div>
+          <input class="search-bar" placeholder="🔍 得意先を検索..." oninput="filterCust(this.value)">
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>順位</th>
+              <th>得意先名</th>
+              <th class="text-right">売上金額</th>
+              <th class="text-right">構成比</th>
+              <th class="text-right">粗利</th>
+              <th class="text-right">粗利率</th>
+              <th class="text-right">件数</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tblCustomer"></tbody>
+        </table>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">得意先別 売上構成（円グラフ）</div>
+        <canvas id="chartCustPie" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- 月比較ビュー（新規） -->
+    <div id="custMonthsView" style="display:none;">
+      <div class="table-card">
+        <div class="section-header">
+          <div class="chart-title" style="margin-bottom:0">得意先 × 月 比較表　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）／選択中の会計年度・売上順</span></div>
+          <input class="search-bar" id="custMonthsSearch" placeholder="🔍 得意先を検索..." oninput="filterCustMonths(this.value)">
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="font-size:12px;white-space:nowrap;">
+            <thead id="custMonthsHead"></thead>
+            <tbody id="custMonthsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全年度比較ビュー（新規） -->
+    <div id="custAllYearsView" style="display:none;">
+      <div class="table-card">
+        <div class="section-header">
+          <div class="chart-title" style="margin-bottom:0">得意先 × 年度 比較　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）/ 全期間・売上順</span></div>
+          <input class="search-bar" id="custAllYearSearch" placeholder="🔍 得意先を検索..." oninput="filterCustAllYears(this.value)">
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="font-size:12px;white-space:nowrap;">
+            <thead id="custAllYearsHead"></thead>
+            <tbody id="custAllYearsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card" style="margin-top:14px;">
+        <div class="chart-title">得意先別 年度推移（上位10社・売上）</div>
+        <canvas id="chartCustYearTrend" height="130"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 得意先詳細ビュー ===== -->
+  <div id="custDetailView" style="display:none">
+    <!-- 戻るボタン＋タイトル・ナビ -->
+    <div class="detail-header">
+      <button class="btn-back" onclick="backToList()">← 一覧に戻る</button>
+      <button class="btn-nav" id="btnPrevCust" onclick="prevCustomer()">‹ 前の得意先</button>
+      <span class="cust-nav-counter" id="custNavCounter">— / —</span>
+      <div class="detail-cust-name" id="detailCustName"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;">
+        <span style="font-size:12px;font-weight:700;color:#555;white-space:nowrap;">📅 対象月</span>
+        <select class="form-input" id="detailMonthSel" onchange="onDetailMonthChange()" style="width:auto;min-width:96px;padding:7px 10px;">
+          <option value="">通年</option>
+        </select>
+      </div>
+      <div class="cust-memo-wrap">
+        <textarea class="cust-memo" id="custMemo" rows="3" placeholder="📝 メモ（自動保存）" oninput="saveCustMemo()"></textarea>
+        <span class="memo-saved-badge" id="memoSavedBadge">✔ 保存済</span>
+      </div>
+      <button class="btn-nav" id="btnNextCust" onclick="nextCustomer()">次の得意先 ›</button>
+    </div>
+
+    <!-- KPI カード -->
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label" id="d-kpi-sales-label">📦 年間売上</div>
+        <div class="kpi-value" id="d-kpi-sales">¥0</div>
+        <div class="kpi-sub" id="d-kpi-sales-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="d-pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="d-pb-sales-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 年間粗利</div>
+        <div class="kpi-value" id="d-kpi-gp">¥0</div>
+        <div class="kpi-sub" id="d-kpi-gp-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="d-pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="d-pb-gp-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="d-kpi-gpr">0%</div>
+        <div class="kpi-sub" id="d-kpi-gpr-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="d-pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="d-pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label" id="d-kpi-month-label">📅 今月の売上</div>
+        <div class="kpi-value" id="d-kpi-month">¥0</div>
+        <div class="kpi-sub" id="d-kpi-month-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="d-pb-month" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="d-pb-month-pct">—</span><span></span></div>
+      </div>
+    </div>
+
+    <!-- 月別チャート -->
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div class="chart-title" id="detailChartTitle">月別 売上・粗利 推移</div>
+      <canvas id="chartDetailMonthly" height="120"></canvas>
+    </div>
+
+    <!-- 月別テーブル -->
+    <div class="table-card">
+      <div class="chart-title">月別 明細</div>
+      <table>
+        <thead>
+          <tr>
+            <th>月</th>
+            <th class="text-right">売上金額</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblDetailMonthly"></tbody>
+      </table>
+    </div>
+
+    <!-- この得意先の メーカー / 品目分類別 内訳 -->
+    <div class="table-card" style="margin-top:18px;">
+      <div class="section-header">
+        <div class="chart-title" style="margin-bottom:0" id="custDimTitle">メーカー別 売上（この得意先）</div>
+        <div style="display:flex;gap:6px;">
+          <button class="view-toggle-btn active" id="btnCustDimMaker" onclick="switchCustDimType('maker')">🏭 メーカー</button>
+          <button class="view-toggle-btn" id="btnCustDimCategory" onclick="switchCustDimType('category')">📦 品目分類</button>
+        </div>
+      </div>
+      <canvas id="chartCustDim" height="150" style="margin-bottom:14px;"></canvas>
+      <table>
+        <thead>
+          <tr>
+            <th>順位</th>
+            <th id="custDimColName">メーカー</th>
+            <th class="text-right">売上金額</th>
+            <th class="text-right">構成比</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblCustDim"></tbody>
+      </table>
+    </div>
+
+    <!-- ドリルダウン：型式（商品）別 内訳（この得意先／クリックで明細） -->
+    <div class="table-card" style="margin-top:18px;">
+      <div class="section-header">
+        <div class="chart-title" style="margin-bottom:0" id="custProdTitle">型式（商品）別 売上（この得意先）　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックすると明細を展開</span></div>
+        <input class="search-bar" id="custProdSearch" placeholder="🔍 型式を検索..." oninput="filterCustProducts(this.value)">
+      </div>
+      <div id="custProdNoCol" style="display:none;font-size:13px;color:#7a1f1f;background:#fff4f4;border:1px solid #ef4444;border-radius:8px;padding:10px 12px;margin-bottom:8px;">型式（商品名）列がデータにありません。再アップロード時に列マッピングで「商品名／型式列」を指定すると、得意先→型式→明細まで掘り下げできます。</div>
+      <table>
+        <thead>
+          <tr>
+            <th>順位</th>
+            <th>型式</th>
+            <th class="text-right">売上金額</th>
+            <th class="text-right">構成比</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tblCustProd"></tbody>
+      </table>
+    </div>
+
+    <!-- 月次推移（この得意先・全期間）-->
+    <div class="chart-card" style="margin-top:18px;">
+      <div class="chart-title" id="detailMonthlyAllTitle">月次 売上・粗利 推移（全期間）</div>
+      <canvas id="chartDetailMonthlyAll" height="110"></canvas>
+    </div>
+
+    <!-- 年度別推移（この得意先・全年度）-->
+    <div class="chart-card" style="margin-top:18px;">
+      <div class="chart-title" id="detailYearTitle">年度別 売上・粗利 推移</div>
+      <canvas id="chartDetailYearly" height="110"></canvas>
+    </div>
+
+    <!-- 年度別詳細テーブル（新規） -->
+    <div class="table-card" style="margin-top:18px;">
+      <div class="chart-title">年度別 詳細比較　<span style="font-size:12px;font-weight:400;color:#aaa;">前年比は直前年度との比較</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>年度</th>
+            <th class="text-right">売上</th>
+            <th class="text-right">前年比</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblDetailYearly"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!--  DIMENSION TAB（メーカー / 品目分類）                        -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-dim">
+
+  <!-- ===== 一覧ビュー ===== -->
+  <div id="dimListView" style="display:none">
+
+    <!-- 分析軸の切替 -->
+    <div class="view-toggle-bar">
+      <span class="view-toggle-lbl">🔎 分析軸：</span>
+      <button class="view-toggle-btn active" id="btnDimMaker" onclick="switchDimType('maker')">🏭 メーカー</button>
+      <button class="view-toggle-btn" id="btnDimCategory" onclick="switchDimType('category')">📦 品目分類</button>
+      <span style="font-size:11px;color:#aaa;margin-left:4px;" id="dimTypeHint">メーカー別に集計</span>
+    </div>
+
+    <!-- 列未設定の注意 -->
+    <div class="mapper-card" id="dimNoCol" style="display:none;background:#fff4f4;border-color:#ef4444;">
+      <div class="mapper-title" style="color:#991b1b;">⚠️ この分析軸に対応する列がデータ内に見つかりません</div>
+      <div style="font-size:13px;color:#7a1f1f;">「メーカー名」「品目分類名」などの列を含むデータを読み込むと分析できます。再アップロード時に列マッピングで指定してください。（未設定の場合は「未設定」としてまとめて集計されます）</div>
+    </div>
+
+    <!-- KPI サマリー -->
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label">📦 年間売上</div>
+        <div class="kpi-value" id="di-kpi-sales">¥0</div>
+        <div class="kpi-sub" id="di-kpi-sales-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="di-pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="di-pb-sales-pct">—</span><span id="di-pb-sales-rem"></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 年間粗利額</div>
+        <div class="kpi-value" id="di-kpi-gp">¥0</div>
+        <div class="kpi-sub" id="di-kpi-gp-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="di-pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="di-pb-gp-pct">—</span><span id="di-pb-gp-rem"></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="di-kpi-gpr">0%</div>
+        <div class="kpi-sub" id="di-kpi-gpr-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="di-pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="di-pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">📅 今月売上</div>
+        <div class="kpi-value" id="di-kpi-month">¥0</div>
+        <div class="kpi-sub" id="di-kpi-month-sub">目標: 未設定</div>
+        <div class="progress-wrap"><div class="progress-bar" id="di-pb-month" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="di-pb-month-pct">—</span><span></span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f2f8;display:flex;justify-content:space-between;font-size:12px;">
+          <span style="color:#888;">今月粗利額</span>
+          <span style="font-weight:700;color:#00a86b;" id="di-kpi-month-gp">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 表示モード切替 -->
+    <div class="view-toggle-bar">
+      <span class="view-toggle-lbl">📊 表示モード：</span>
+      <button class="view-toggle-btn active" id="btnDimModeYear" onclick="switchDimViewMode('year')">📅 選択年度</button>
+      <button class="view-toggle-btn" id="btnDimModeMonths" onclick="switchDimViewMode('months')">📆 月比較</button>
+      <button class="view-toggle-btn" id="btnDimModeAllYears" onclick="switchDimViewMode('allyears')">🗓 全年度比較</button>
+      <span style="font-size:11px;color:#aaa;margin-left:4px;" id="dimViewModeHint">選択中の会計年度のデータを表示</span>
+    </div>
+
+    <!-- 選択年度ビュー -->
+    <div id="dimSingleYearView">
+      <div class="table-card">
+        <div class="section-header">
+          <div class="chart-title" style="margin-bottom:0" id="dimTableTitle">メーカー別 売上分析　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックで詳細表示</span></div>
+          <input class="search-bar" id="dimSearch" placeholder="🔍 検索..." oninput="filterDim(this.value)">
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>順位</th>
+              <th id="dimColName">メーカー</th>
+              <th class="text-right">売上金額</th>
+              <th class="text-right">構成比</th>
+              <th class="text-right">粗利</th>
+              <th class="text-right">粗利率</th>
+              <th class="text-right">件数</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tblDim"></tbody>
+        </table>
+      </div>
+      <div class="chart-grid" style="margin-top:14px;">
+        <div class="chart-card">
+          <div class="chart-title" id="dimBarTitle">メーカー別 売上 TOP10</div>
+          <canvas id="chartDimBar" height="220"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">売上構成（円グラフ）</div>
+          <canvas id="chartDimPie" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 月比較ビュー -->
+    <div id="dimMonthsView" style="display:none;">
+      <div class="table-card">
+        <div class="section-header">
+          <div class="chart-title" style="margin-bottom:0" id="dimMonthsTitle">メーカー × 月 比較表　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）／選択中の会計年度・売上順</span></div>
+          <input class="search-bar" id="dimMonthsSearch" placeholder="🔍 検索..." oninput="filterDimMonths(this.value)">
+        </div>
+        <table style="font-size:12px;white-space:nowrap;">
+          <thead id="dimMonthsHead"></thead>
+          <tbody id="dimMonthsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 全年度比較ビュー -->
+    <div id="dimAllYearsView" style="display:none;">
+      <div class="table-card">
+        <div class="section-header">
+          <div class="chart-title" style="margin-bottom:0" id="dimAllYearsTitle">メーカー × 年度 比較　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）/ 全期間・売上順</span></div>
+          <input class="search-bar" id="dimAllYearSearch" placeholder="🔍 検索..." oninput="filterDimAllYears(this.value)">
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="font-size:12px;white-space:nowrap;">
+            <thead id="dimAllYearsHead"></thead>
+            <tbody id="dimAllYearsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card" style="margin-top:14px;">
+        <div class="chart-title" id="dimYearTrendTitle">メーカー別 年度推移（上位10件・売上）</div>
+        <canvas id="chartDimYearTrend" height="130"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 詳細ビュー ===== -->
+  <div id="dimDetailView" style="display:none">
+    <div class="detail-header">
+      <button class="btn-back" onclick="backToDimList()">← 一覧に戻る</button>
+      <button class="btn-nav" id="btnPrevDim" onclick="prevDim()">‹ 前へ</button>
+      <span class="cust-nav-counter" id="dimNavCounter">— / —</span>
+      <div class="detail-cust-name" id="dimDetailName"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;">
+        <span style="font-size:12px;font-weight:700;color:#555;white-space:nowrap;">📅 対象月</span>
+        <select class="form-input" id="dimDetailMonthSel" onchange="onDimDetailMonthChange()" style="width:auto;min-width:96px;padding:7px 10px;">
+          <option value="">通年</option>
+        </select>
+      </div>
+      <button class="btn-nav" id="btnNextDim" onclick="nextDim()">次へ ›</button>
+    </div>
+
+    <div class="kpi-grid" style="margin-bottom:18px;">
+      <div class="kpi-card">
+        <div class="kpi-label" id="dd-kpi-sales-label">📦 年間売上</div>
+        <div class="kpi-value" id="dd-kpi-sales">¥0</div>
+        <div class="kpi-sub" id="dd-kpi-sales-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="dd-pb-sales" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dd-pb-sales-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">💰 年間粗利</div>
+        <div class="kpi-value" id="dd-kpi-gp">¥0</div>
+        <div class="kpi-sub" id="dd-kpi-gp-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="dd-pb-gp" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dd-pb-gp-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">📊 粗利率</div>
+        <div class="kpi-value" id="dd-kpi-gpr">0%</div>
+        <div class="kpi-sub" id="dd-kpi-gpr-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="dd-pb-gpr" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dd-pb-gpr-pct">—</span><span></span></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label" id="dd-kpi-month-label">📅 今月の売上</div>
+        <div class="kpi-value" id="dd-kpi-month">¥0</div>
+        <div class="kpi-sub" id="dd-kpi-month-sub"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="dd-pb-month" style="width:0%"></div></div>
+        <div class="progress-labels"><span id="dd-pb-month-pct">—</span><span></span></div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div class="chart-title" id="dimDetailChartTitle">月別 売上・粗利 推移</div>
+      <canvas id="chartDimDetailMonthly" height="120"></canvas>
+    </div>
+
+    <div class="table-card">
+      <div class="chart-title">月別 明細</div>
+      <table>
+        <thead>
+          <tr>
+            <th>月</th>
+            <th class="text-right">売上金額</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblDimDetailMonthly"></tbody>
+      </table>
+    </div>
+
+    <!-- ドリルダウン：商品別 内訳（クリックで明細） -->
+    <div class="table-card" style="margin-top:18px;">
+      <div class="section-header">
+        <div class="chart-title" style="margin-bottom:0" id="dimProductsTitle">商品別 内訳　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックすると明細（伝票行）を展開</span></div>
+        <input class="search-bar" id="dimProdSearch" placeholder="🔍 商品を検索..." oninput="filterDimProducts(this.value)">
+      </div>
+      <div id="dimProdNoCol" style="display:none;font-size:13px;color:#7a1f1f;background:#fff4f4;border:1px solid #ef4444;border-radius:8px;padding:10px 12px;margin-bottom:8px;">商品名列がデータにありません。再アップロード時に列マッピングで「商品名列」を指定すると、メーカー→商品→明細まで掘り下げできます。</div>
+      <table>
+        <thead>
+          <tr>
+            <th>順位</th>
+            <th>商品名</th>
+            <th class="text-right">売上金額</th>
+            <th class="text-right">構成比</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tblDimProducts"></tbody>
+      </table>
+    </div>
+
+    <div class="chart-card" style="margin-top:18px;">
+      <div class="chart-title" id="dimDetailYearTitle">年度別 売上・粗利 推移</div>
+      <canvas id="chartDimDetailYearly" height="110"></canvas>
+    </div>
+
+    <div class="table-card" style="margin-top:18px;">
+      <div class="chart-title">年度別 詳細比較　<span style="font-size:12px;font-weight:400;color:#aaa;">前年比は直前年度との比較</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>年度</th>
+            <th class="text-right">売上</th>
+            <th class="text-right">前年比</th>
+            <th class="text-right">粗利</th>
+            <th class="text-right">粗利率</th>
+            <th class="text-right">件数</th>
+          </tr>
+        </thead>
+        <tbody id="tblDimDetailYearly"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="empty-state" id="dimEmpty"><div class="empty-icon">🏭</div><div class="empty-text">CSVを読み込むと分類別分析が表示されます</div><div class="empty-sub">メーカー名・品目分類名のいずれかの列があると分析できます</div></div>
+
+</div>
+
+<!-- YEARLY TAB -->
+<div class="tab-panel" id="tab-yearly">
+  <div class="chart-card" style="margin-bottom:18px;">
+    <div class="chart-title">年度別 売上・粗利・粗利率 推移</div>
+    <canvas id="chartYearly" height="100"></canvas>
+  </div>
+  <div class="table-card">
+    <div class="chart-title">年度別 比較　<span style="font-size:12px;font-weight:400;color:#aaa;">全データを会計年度（4月〜3月）で集計</span></div>
+    <table>
+      <thead><tr><th>年度</th><th class="text-right">売上</th><th class="text-right">前年比</th><th class="text-right">粗利</th><th class="text-right">粗利率</th><th class="text-right">件数</th></tr></thead>
+      <tbody id="tblYearly"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="yearlyEmpty"><div class="empty-icon">📆</div><div class="empty-text">CSVを読み込むと年度比較が表示されます</div></div>
+</div>
+
+<!-- MATRIX TAB（得意先×月）-->
+<div class="tab-panel" id="tab-matrix">
+  <div class="table-card">
+    <div class="section-header">
+      <div class="chart-title" style="margin-bottom:0">得意先×月 比較表　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）／選択中の会計年度・売上順</span></div>
+      <input class="search-bar" id="mtxSearch" placeholder="🔍 得意先を検索..." oninput="filterMatrix(this.value)">
+    </div>
+    <table style="font-size:12px;white-space:nowrap;">
+      <thead><tr><th style="position:sticky;left:0;background:#f4f6fb;z-index:2;">得意先</th><th>区分</th><th class="text-right">4月</th><th class="text-right">5月</th><th class="text-right">6月</th><th class="text-right">7月</th><th class="text-right">8月</th><th class="text-right">9月</th><th class="text-right">10月</th><th class="text-right">11月</th><th class="text-right">12月</th><th class="text-right">1月</th><th class="text-right">2月</th><th class="text-right">3月</th><th class="text-right">合計</th></tr></thead>
+      <tbody id="mtxBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="matrixEmpty"><div class="empty-icon">📊</div><div class="empty-text">CSVを読み込むと比較表が表示されます</div></div>
+</div>
+
+<!-- YEAR-MATRIX TAB（得意先×年度）-->
+<div class="tab-panel" id="tab-ymatrix">
+  <div class="table-card">
+    <div class="section-header">
+      <div class="chart-title" style="margin-bottom:0">得意先×年度 比較表　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）／会計年度・売上順</span></div>
+      <input class="search-bar" id="ymtxSearch" placeholder="🔍 得意先を検索..." oninput="filterYMatrix(this.value)">
+    </div>
+    <table style="font-size:12px;white-space:nowrap;">
+      <thead id="ymtxHead"></thead>
+      <tbody id="ymtxBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="ymatrixEmpty"><div class="empty-icon">🗓</div><div class="empty-text">CSVを読み込むと年度別の比較表が表示されます</div></div>
+</div>
+
+<!-- ============================================================ -->
+<!--  SETTINGS TAB                                                -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-settings">
+
+  <!-- 編集する年度の選択バー -->
+  <div class="view-toggle-bar" style="margin-bottom:18px;">
+    <span class="view-toggle-lbl">🎯 編集する年度：</span>
+    <select class="form-input" id="settingsYearSel" onchange="onSettingsYearChange()" style="width:auto;min-width:120px;padding:7px 12px;"></select>
+    <span style="font-size:11px;color:#aaa;margin-left:4px;">2023〜2027年度それぞれの目標を入力・保存できます。下部の比較表で年間で見比べられます。</span>
+  </div>
+
+  <div class="settings-grid">
+
+    <!-- Annual targets -->
+    <div class="settings-card">
+      <div class="settings-title">📌 <span id="stYearAnnual"></span> 年間目標</div>
+      <div class="form-group">
+        <label class="form-label">年間売上目標（円）</label>
+        <input type="number" class="form-input" id="tgtAnnualSales" placeholder="例: 120000000" step="1000000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">年間粗利目標（円）</label>
+        <input type="number" class="form-input" id="tgtAnnualGP" placeholder="例: 36000000" step="1000000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">粗利率目標（%）</label>
+        <input type="number" class="form-input" id="tgtAnnualGPR" placeholder="例: 30" step="0.1" min="0" max="100">
+      </div>
+      <button class="btn btn-primary" onclick="saveAnnual()">この年度の年間目標を保存</button>
+    </div>
+
+    <!-- Monthly sales targets -->
+    <div class="settings-card">
+      <div class="settings-title">📅 <span id="stYearMSales"></span> 月別 売上目標（円）</div>
+      <div class="monthly-grid" id="mSalesGrid"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveMonthSales()">保存する</button>
+        <button class="btn btn-gray" onclick="distributeEvenly()">均等分配</button>
+      </div>
+    </div>
+
+    <!-- Monthly GP targets -->
+    <div class="settings-card">
+      <div class="settings-title">📅 <span id="stYearMGP"></span> 月別 粗利目標（円）</div>
+      <div class="monthly-grid" id="mGPGrid"></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-primary" onclick="saveMonthGP()">保存する</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 年度別 目標 比較 -->
+  <div class="settings-card" style="margin-top:18px;">
+    <div class="settings-title">📊 年度別 目標 比較（2023〜2027年度）</div>
+    <div style="overflow-x:auto;">
+      <table style="white-space:nowrap;">
+        <thead id="tgtCompareHead"></thead>
+        <tbody id="tgtCompareBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:20px;">
+      <div class="chart-title">年間 売上目標・粗利目標・粗利率目標 の年度比較</div>
+      <canvas id="chartTargetCompare" height="110"></canvas>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /content -->
+</div><!-- /app-frame -->
+
+<!-- ===== MOBILE BOTTOM NAV ===== -->
+<nav class="mnav" id="mnav">
+  <button class="mnav-item active" data-tab="dashboard" onclick="switchTab('dashboard')"><span class="mnav-ico">📈</span>ダッシュ</button>
+  <button class="mnav-item" data-tab="monthly" onclick="switchTab('monthly')"><span class="mnav-ico">📅</span>月別</button>
+  <button class="mnav-item" data-tab="daily" onclick="switchTab('daily')"><span class="mnav-ico">📆</span>日別</button>
+  <button class="mnav-item" data-tab="customer" onclick="switchTab('customer')"><span class="mnav-ico">🏢</span>得意先</button>
+  <button class="mnav-item" data-menu="1" onclick="openNavSheet()"><span class="mnav-ico">☰</span>メニュー</button>
+</nav>
+<div class="sheet-overlay" id="navOverlay" onclick="closeNavSheet()"></div>
+<div class="nav-sheet" id="navSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">すべてのメニュー</div>
+  <div class="sheet-grid">
+    <button class="sheet-item" data-tab="dashboard" onclick="switchTab('dashboard')"><span class="sheet-ico">📈</span>ダッシュボード</button>
+    <button class="sheet-item" data-tab="monthly" onclick="switchTab('monthly')"><span class="sheet-ico">📅</span>月別分析</button>
+    <button class="sheet-item" data-tab="daily" onclick="switchTab('daily')"><span class="sheet-ico">📆</span>日別分析</button>
+    <button class="sheet-item" data-tab="customer" onclick="switchTab('customer')"><span class="sheet-ico">🏢</span>得意先別</button>
+    <button class="sheet-item" data-tab="dim" onclick="switchTab('dim')"><span class="sheet-ico">🏭</span>分類別分析</button>
+    <button class="sheet-item" data-tab="yearly" onclick="switchTab('yearly')"><span class="sheet-ico">📆</span>年度比較</button>
+    <button class="sheet-item" data-tab="matrix" onclick="switchTab('matrix')"><span class="sheet-ico">📊</span>比較表</button>
+    <button class="sheet-item" data-tab="ymatrix" onclick="switchTab('ymatrix')"><span class="sheet-ico">🗓</span>年度別表</button>
+    <button class="sheet-item" data-tab="settings" onclick="switchTab('settings')"><span class="sheet-ico">⚙️</span>目標設定</button>
+  </div>
+</div>
+
+<script>
+if(window.Chart){ Chart.defaults.font.size=10; Chart.defaults.plugins.legend.labels.boxWidth=12; Chart.defaults.plugins.legend.labels.padding=8; }
+</script>
+
+<script>
+// ================================================================
+// STATE
+// ================================================================
+const S = {
+  raw: [],
+  rows: [],
+  cols: [],
+  map: { date:null, cust:null, sales:null, cost:null, gp:null, maker:null, makerName:null, category:null, categoryName:null, product:null, productName:null },
+  targets: {
+    aSales: 0, aGP: 0, aGPR: 0,
+    mSales: Array(12).fill(0),
+    mGP:    Array(12).fill(0),
+  },
+  targetsByYear: {},
+  settingsYear: new Date().getFullYear(),
+  year: new Date().getFullYear(),
+  charts: {},
+  custList: [],
+  custIdx: 0,
+  memos: {},
+  detailCust: null,
+  detailMonth: null,
+  dailyFi: null,
+  custViewMode: 'year',
+  custDimType: 'maker',   // 得意先詳細での内訳軸 'maker' | 'category'
+  // ---- 分類別分析（メーカー / 品目分類）----
+  dimType: 'maker',       // 'maker' | 'category'
+  dimViewMode: 'year',    // 'year' | 'months' | 'allyears'
+  dimList: [],
+  dimIdx: 0,
+  detailDim: null,
+  detailDimMonth: null,
+};
+
+const SETTINGS_YEARS = [2023, 2024, 2025, 2026, 2027];
+
+// ================================================================
+// INIT
+// ================================================================
+function init() {
+  buildYearSel();
+  loadTargets();
+  if (!SETTINGS_YEARS.includes(S.settingsYear)) {
+    S.settingsYear = SETTINGS_YEARS.includes(S.year) ? S.year : SETTINGS_YEARS[SETTINGS_YEARS.length-1];
+  }
+  buildSettingsYearSel();
+  applyTargetsToForm();
+  renderTargetCompare();
+  S.targets = targetsFor(S.year);
+}
+
+function buildYearSel() {
+  const sel = document.getElementById('yearSelect');
+  sel.innerHTML = '';
+  const cfy = currentFiscalYear();
+  for (let y = cfy-3; y <= cfy+1; y++) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y + '年度';
+    if (y === cfy) o.selected = true;
+    sel.appendChild(o);
+  }
+  S.year = cfy;
+}
+
+function onYearChange() {
+  S.year = +document.getElementById('yearSelect').value;
+  S.targets = targetsFor(S.year);
+  if (S.rows.length) render();
+}
+
+// ================================================================
+// TABS
+// ================================================================
+function switchTab(name) {
+  const names = ['dashboard','monthly','daily','customer','dim','yearly','matrix','ymatrix','settings'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const primary = ['dashboard','monthly','daily','customer'];
+  document.querySelectorAll('.mnav-item').forEach(b => {
+    if (b.dataset.tab) b.classList.toggle('active', b.dataset.tab===name);
+    else b.classList.toggle('active', !primary.includes(name));
+  });
+  document.querySelectorAll('.sheet-item').forEach(b => b.classList.toggle('active', b.dataset.tab===name));
+  closeNavSheet();
+  window.scrollTo(0,0);
+  if (name==='daily' && S.rows.length) { buildDaySel(); renderDaily(); }
+  if (name==='dim' && S.rows.length) renderDim(filtered());
+  if (name==='settings') renderTargetCompare();
+}
+function openNavSheet(){ document.getElementById('navSheet').classList.add('open'); document.getElementById('navOverlay').classList.add('open'); }
+function closeNavSheet(){ var s=document.getElementById('navSheet'), o=document.getElementById('navOverlay'); if(s)s.classList.remove('open'); if(o)o.classList.remove('open'); }
+
+// ================================================================
+// FILE HANDLING
+// ================================================================
+function handleDragOver(e){ e.preventDefault(); document.getElementById('uploadArea').classList.add('drag-over'); }
+function handleDragLeave(){ document.getElementById('uploadArea').classList.remove('drag-over'); }
+function handleDrop(e){ e.preventDefault(); handleDragLeave(); const f=e.dataTransfer.files[0]; if(f) readFile(f); }
+function handleFileSelect(e){ const f=e.target.files[0]; if(f) readFile(f); e.target.value=''; }
+
+function readFile(file) {
+  const isCSV = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const buf = new Uint8Array(ev.target.result);
+      let wb;
+      if (isCSV) {
+        let text = new TextDecoder('utf-8', {fatal:false}).decode(buf);
+        if ((text.match(/�/g) || []).length > 5) {
+          text = new TextDecoder('shift_jis').decode(buf);
+        }
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        wb = XLSX.read(text, {type:'string', cellDates:true, raw:false});
+      } else {
+        wb = XLSX.read(buf, {type:'array', cellDates:true});
+      }
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if (!json.length) { alert('データが見つかりませんでした。'); return; }
+      S.raw = json;
+      S.cols = Object.keys(json[0]);
+      autoDetect();
+      document.getElementById('fileBadge').textContent = file.name;
+      if (!S.map.date || !S.map.sales) showMapper();
+      else { hideMapper(); processData(); render(); }
+    } catch(e) { alert('読込エラー: ' + e.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ================================================================
+// COLUMN AUTO-DETECT
+// ================================================================
+function autoDetect() {
+  const C = S.cols;
+  const byPriority = (pats) => {
+    for (const p of pats) {
+      const found = C.find(c => c && c.trim() === p);
+      if (found) return found;
+    }
+    return null;
+  };
+  const partial = (pats) => C.find(c => c && pats.some(p => c.replace(/\s/g,'').toLowerCase().includes(p.toLowerCase())));
+
+  S.map.date  = byPriority(['売上日','請求日','伝票発行日','日付','取引日','年月日','出荷日'])
+             || partial(['日付','取引日','年月日','date']);
+  S.map.cust  = byPriority(['得意先名','顧客名','取引先名'])
+             || partial(['得意先','顧客','取引先','customer','client']);
+  S.map.sales = byPriority(['売上金額','売上高','売上額'])
+             || partial(['売上金額','売上高','売上額','sales','uriage']);
+  S.map.cost  = byPriority(['入値金額','原価金額','仕入金額'])
+             || partial(['入値金額','原価金額','仕入金額','原価','仕入','コスト','cost']);
+  S.map.gp    = byPriority(['粗利金額','粗利益'])
+             || partial(['粗利金額','粗利益','粗利','利益','GP','grossprofit']);
+  S.map.maker     = byPriority(['メーカー','ﾒｰｶｰ','メーカーコード','ﾒｰｶｰｺｰﾄﾞ','メーカーCD','仕入先コード'])
+             || partial(['メーカーコード','ﾒｰｶｰｺｰﾄﾞ','メーカーcd','makercode','maker']);
+  S.map.makerName = byPriority(['メーカー名','ﾒｰｶｰ名','仕入先名','ブランド名','ブランド'])
+             || partial(['メーカー名','ﾒｰｶｰ名','仕入先名','ブランド','makername','brand']);
+  S.map.category  = byPriority(['品目分類','商品分類','品種','分類','カテゴリ','カテゴリー','部門'])
+             || partial(['品目分類コード','商品分類コード','分類コード']);
+  S.map.categoryName = byPriority(['品目分類名','商品分類名','品種名','分類名','カテゴリ名','カテゴリー名'])
+             || partial(['品目分類名','商品分類名','分類名','categoryname']);
+  S.map.productName = byPriority(['型式','型番','形式','型式名','機種','商品名','品名','製品名','品目名','アイテム名','製品'])
+             || partial(['型式','型番','形式','機種','商品名','品名','製品名','品目名','model','productname','itemname']);
+  S.map.product = byPriority(['商品コード','品番','商品CD','品目コード','JANコード','JAN'])
+             || partial(['商品コード','品番','商品cd','品目コード','productcode','itemcode','jancode']);
+}
+
+function showMapper() {
+  document.getElementById('mapperCard').style.display = 'block';
+  const fields = [
+    {k:'date', l:'日付列 ＊必須'},
+    {k:'cust', l:'得意先列'},
+    {k:'sales',l:'売上金額列 ＊必須'},
+    {k:'cost', l:'原価列'},
+    {k:'gp',   l:'粗利列'},
+    {k:'maker',        l:'メーカーコード列'},
+    {k:'makerName',    l:'メーカー名列（表示に使用）'},
+    {k:'category',     l:'品目分類列（コード）'},
+    {k:'categoryName', l:'品目分類名列（表示に使用）'},
+    {k:'productName',  l:'商品名／型式列（ドリルダウン表示に使用）'},
+    {k:'product',      l:'商品コード列'},
+  ];
+  document.getElementById('mapperGrid').innerHTML = fields.map(f => `
+    <div>
+      <div class="form-label">${f.l}</div>
+      <select class="form-input" id="mp-${f.k}">
+        <option value="">-- なし --</option>
+        ${S.cols.map(c=>`<option value="${c}" ${S.map[f.k]===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>`).join('');
+}
+
+function hideMapper() { document.getElementById('mapperCard').style.display='none'; }
+
+function applyMapping() {
+  ['date','cust','sales','cost','gp','maker','makerName','category','categoryName','product','productName'].forEach(k => {
+    const el = document.getElementById('mp-'+k);
+    if (el) S.map[k] = el.value || null;
+  });
+  if (!S.map.date) { alert('日付列を選択してください。'); return; }
+  if (!S.map.sales) { alert('売上金額列を選択してください。'); return; }
+  hideMapper();
+  processData();
+  render();
+}
+
+// ================================================================
+// PROCESS DATA
+// ================================================================
+function processData() {
+  const {date:dc, cust:cc, sales:sc, cost:costc, gp:gpc, maker:mkc, makerName:mknc, category:catc, categoryName:catnc, product:pc, productName:pnc} = S.map;
+
+  S.rows = S.raw.map(row => {
+    let d = null;
+    const dv = row[dc];
+    if (dv instanceof Date && !isNaN(dv)) {
+      d = dv;
+    } else if (typeof dv === 'number') {
+      d = new Date(Math.round((dv - 25569)*86400000));
+    } else if (typeof dv === 'string' && dv.trim()) {
+      const s = dv.trim();
+      let m = s.match(/^(\d{4})[\/\-](\d{1,2})(?:[\/\-](\d{1,2}))?/);
+      if (m) {
+        d = new Date(+m[1], +m[2]-1, m[3] ? +m[3] : 1);
+      } else {
+        m = s.match(/^(\d{2})[\/\-](\d{2})(?:[\/\-](\d{2}))?/);
+        if (m) {
+          const year = 2000 + parseInt(m[1], 10);
+          d = new Date(year, +m[2]-1, m[3] ? +m[3] : 1);
+        } else {
+          d = new Date(s);
+        }
+      }
+    }
+    if (!d || isNaN(d)) return null;
+
+    const toNum = v => parseFloat(String(v).replace(/[,¥\s円%]/g,'')) || 0;
+    const sales = toNum(row[sc]);
+    let cost=0, gp=0;
+    if (gpc && row[gpc] !== '' && row[gpc] !== null && row[gpc] !== undefined) {
+      gp = toNum(row[gpc]); cost = sales - gp;
+    } else if (costc && row[costc] !== '' && row[costc] !== null && row[costc] !== undefined) {
+      cost = toNum(row[costc]); gp = sales - cost;
+    }
+
+    return {
+      date: d,
+      year: d.getFullYear(),
+      month: d.getMonth()+1,
+      cust: cc ? (String(row[cc]).trim() || '不明') : '不明',
+      maker:        mkc  ? (String(row[mkc]).trim()  || '') : '',
+      makerName:    mknc ? (String(row[mknc]).trim() || '') : '',
+      category:     catc ? (String(row[catc]).trim() || '') : '',
+      categoryName: catnc? (String(row[catnc]).trim()|| '') : '',
+      product:      (pnc ? (String(row[pnc]).trim()) : '') || (pc ? (String(row[pc]).trim()) : '') || '',
+      sales, cost, gp,
+    };
+  }).filter(r => r && r.sales > 0);
+}
+
+function filtered() {
+  const fy = S.year;
+  return S.rows.filter(r =>
+    (r.month >= 4 && r.year === fy) ||
+    (r.month <= 3 && r.year === fy + 1)
+  );
+}
+
+// ================================================================
+// RENDER ALL
+// ================================================================
+function render() {
+  S.targets = targetsFor(S.year);
+  document.getElementById('dashboardContent').style.display = 'block';
+  document.getElementById('emptyState').style.display = 'none';
+  const data = filtered();
+  renderKPI(data);
+  renderInsights();
+  renderMonthlyChart(data);
+  renderCustBarChart(data);
+  renderSummaryTable(data);
+  renderMonthlyTable(data);
+  renderCustomerTable(data);
+  renderMonthlyBarChart(data);
+  renderCustPieChart(data);
+  fillTabKPI('ml', data);
+  fillTabKPI('cl', data);
+  if (S.custViewMode === 'months') renderCustMonths();
+  else if (S.custViewMode === 'allyears') renderCustAllYears();
+  renderYearly();
+  renderMatrix(data);
+  renderYMatrix();
+  renderDim(data);
+  if (document.getElementById('tab-daily').classList.contains('active')) { buildDaySel(); renderDaily(); }
+}
+
+function fillTabKPI(pfx, data) {
+  const totalSales = sum(data,'sales');
+  const totalGP    = sum(data,'gp');
+  const gpr        = totalSales ? totalGP/totalSales*100 : 0;
+  const T          = S.targets;
+  const cm         = new Date().getMonth()+1;
+  const fi         = cm2fi(cm);
+  const mData      = data.filter(r=>r.month===cm);
+  const mSales     = sum(mData,'sales');
+  const mGP        = sum(mData,'gp');
+
+  const set = (id, val) => { const el=document.getElementById(pfx+'-'+id); if(el) el.textContent=val; };
+  const setW = (id, pct) => { const el=document.getElementById(pfx+'-pb-'+id); if(el) el.style.width=Math.min(pct,100)+'%'; };
+
+  const sPct = T.aSales ? Math.min(totalSales/T.aSales*100,200) : 0;
+  set('kpi-sales',     fmt(totalSales));
+  set('kpi-sales-sub', T.aSales ? '目標: '+fmt(T.aSales) : '目標: 未設定');
+  setW('sales',        sPct);
+  set('pb-sales-pct',  T.aSales ? sPct.toFixed(1)+'%' : '—');
+  set('pb-sales-rem',  T.aSales ? '残り '+fmt(Math.max(0,T.aSales-totalSales)) : '');
+
+  const gPct = T.aGP ? Math.min(totalGP/T.aGP*100,200) : 0;
+  set('kpi-gp',     fmt(totalGP));
+  set('kpi-gp-sub', T.aGP ? '目標: '+fmt(T.aGP) : '目標: 未設定');
+  setW('gp',        gPct);
+  set('pb-gp-pct',  T.aGP ? gPct.toFixed(1)+'%' : '—');
+  set('pb-gp-rem',  T.aGP ? '残り '+fmt(Math.max(0,T.aGP-totalGP)) : '');
+
+  const grPct = T.aGPR ? Math.min(gpr/T.aGPR*100,200) : 0;
+  set('kpi-gpr',     gpr.toFixed(1)+'%');
+  set('kpi-gpr-sub', T.aGPR ? '目標: '+T.aGPR.toFixed(1)+'%' : '目標: 未設定');
+  setW('gpr',        grPct);
+  set('pb-gpr-pct',  T.aGPR ? grPct.toFixed(1)+'%' : '—');
+
+  const mPct = T.mSales[fi] ? Math.min(mSales/T.mSales[fi]*100,200) : 0;
+  set('kpi-month',     fmt(mSales));
+  set('kpi-month-sub', T.mSales[fi] ? '目標: '+fmt(T.mSales[fi]) : '目標: 未設定');
+  setW('month',        mPct);
+  set('pb-month-pct',  T.mSales[fi] ? mPct.toFixed(1)+'%' : '—');
+  set('kpi-month-gp',  mGP ? fmt(mGP) : '—');
+}
+
+// ================================================================
+// KPI CARDS
+// ================================================================
+function renderKPI(data) {
+  const totalSales = sum(data,'sales');
+  const totalGP    = sum(data,'gp');
+  const gpr = totalSales ? totalGP/totalSales*100 : 0;
+
+  const now = new Date();
+  const cm  = now.getMonth()+1;
+  const fi  = cm2fi(cm);
+  const mData  = data.filter(r=>r.month===cm);
+  const mSales = sum(mData,'sales');
+  const mGP    = sum(mData,'gp');
+
+  const T = S.targets;
+
+  setKPI('sales', totalSales, T.aSales, '残り');
+  setKPI('gp',    totalGP,   T.aGP,    '残り', 'gp');
+  setGPR(gpr, T.aGPR);
+  setMonthKPI(mSales, T.mSales[fi]);
+  const mgpEl = document.getElementById('kpi-month-gp');
+  if (mgpEl) mgpEl.textContent = mGP ? fmt(mGP) : '—';
+}
+
+function setKPI(id, actual, target, remLabel) {
+  const pct = target ? Math.min(actual/target*100, 200) : 0;
+  document.getElementById('kpi-'+id).textContent = fmt(actual);
+  document.getElementById('kpi-'+id+'-sub').textContent = target ? '目標: '+fmt(target) : '目標: 未設定';
+  document.getElementById('pb-'+id).style.width = Math.min(pct,100)+'%';
+  document.getElementById('pb-'+id+'-pct').textContent = target ? pct.toFixed(1)+'%' : '—';
+  const remEl = document.getElementById('pb-'+id+'-rem');
+  if (remEl) remEl.textContent = target ? remLabel+' '+fmt(Math.max(0,target-actual)) : '';
+}
+
+function setGPR(gpr, tgt) {
+  document.getElementById('kpi-gpr').textContent = gpr.toFixed(1)+'%';
+  document.getElementById('kpi-gpr-sub').textContent = tgt ? '目標: '+tgt.toFixed(1)+'%' : '目標: 未設定';
+  const pct = tgt ? Math.min(gpr/tgt*100,200) : 0;
+  document.getElementById('pb-gpr').style.width = Math.min(pct,100)+'%';
+  document.getElementById('pb-gpr-pct').textContent = tgt ? pct.toFixed(1)+'%' : '—';
+}
+
+function setMonthKPI(actual, target) {
+  const pct = target ? Math.min(actual/target*100,200) : 0;
+  document.getElementById('kpi-month').textContent = fmt(actual);
+  document.getElementById('kpi-month-sub').textContent = target ? '目標: '+fmt(target) : '目標: 未設定';
+  document.getElementById('pb-month').style.width = Math.min(pct,100)+'%';
+  document.getElementById('pb-month-pct').textContent = target ? pct.toFixed(1)+'%' : '—';
+  document.getElementById('pb-month-rem').textContent = target ? '残り '+fmt(Math.max(0,target-actual)) : '';
+}
+
+// ================================================================
+// CHARTS
+// ================================================================
+const COLORS = ['#0066cc','#00a86b','#7c3aed','#f59e0b','#ef4444','#06b6d4','#84cc16','#ec4899','#8b5cf6','#94a3b8'];
+
+const FM_LABELS = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+function fm2cm(fi) { return ((fi + 3) % 12) + 1; }
+function cm2fi(cm) { return (cm - 4 + 12) % 12; }
+function currentFiscalYear() {
+  const now = new Date();
+  return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+// ================================================================
+// 祝日・営業日ユーティリティ
+// ================================================================
+const HOLIDAYS = new Set([
+  '2023-01-01','2023-01-02','2023-01-09','2023-02-11','2023-02-23','2023-03-21','2023-04-29','2023-05-03','2023-05-04','2023-05-05','2023-07-17','2023-08-11','2023-09-18','2023-09-23','2023-10-09','2023-11-03','2023-11-23',
+  '2024-01-01','2024-01-08','2024-02-11','2024-02-12','2024-02-23','2024-03-20','2024-04-29','2024-05-03','2024-05-04','2024-05-05','2024-05-06','2024-07-15','2024-08-11','2024-08-12','2024-09-16','2024-09-22','2024-09-23','2024-10-14','2024-11-03','2024-11-04','2024-11-23',
+  '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24',
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-16','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23',
+]);
+
+function dateKey(year, month, day) {
+  return year + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+}
+
+function isBusinessDay(year, month, day) {
+  const dt = new Date(year, month - 1, day);
+  const dow = dt.getDay();
+  if (dow === 0 || dow === 6) return false;
+  if (HOLIDAYS.has(dateKey(year, month, day))) return false;
+  return true;
+}
+
+function getBusinessDaysInMonth(year, month) {
+  const dim = new Date(year, month, 0).getDate();
+  const days = [];
+  for (let d = 1; d <= dim; d++) {
+    if (isBusinessDay(year, month, d)) days.push(d);
+  }
+  return days;
+}
+
+function mkMonthArr(data, key) {
+  return Array.from({length:12},(_,fi)=>sum(data.filter(r=>r.month===fm2cm(fi)),key));
+}
+
+function renderMonthlyChart(data) {
+  const labels = FM_LABELS;
+  const sSales = mkMonthArr(data,'sales');
+  const sGP    = mkMonthArr(data,'gp');
+  const tSales = S.targets.mSales;
+
+  mkChart('chartMonthly','monthly',{
+    data: {
+      labels,
+      datasets: [
+        {type:'bar', label:'売上実績', data:sSales, backgroundColor:'rgba(0,102,204,0.75)', yAxisID:'y'},
+        {type:'bar', label:'粗利実績', data:sGP,    backgroundColor:'rgba(0,168,107,0.75)', yAxisID:'y'},
+        {type:'line',label:'売上目標', data:tSales,  borderColor:'#f59e0b', borderWidth:2,
+          borderDash:[5,5], pointRadius:4, fill:false, tension:0.3, yAxisID:'y'},
+      ]
+    },
+    options:{responsive:true,
+      plugins:{legend:{position:'top'}},
+      scales:{y:{ticks:{callback:fmtAxis}}}}
+  });
+}
+
+function renderCustBarChart(data) {
+  const cm  = custMap(data);
+  const top = cm.slice(0,10);
+  mkChart('chartCustBar','custBar',{
+    type:'bar',
+    data:{
+      labels: top.map(([k])=>k.length>12?k.slice(0,12)+'…':k),
+      datasets:[
+        {label:'売上',   data:top.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)'},
+        {label:'粗利額', data:top.map(([,v])=>v.gp),    backgroundColor:'rgba(0,168,107,0.75)'},
+      ]
+    },
+    options:{indexAxis:'y', responsive:true,
+      plugins:{legend:{position:'top'}},
+      scales:{x:{ticks:{callback:fmtAxis}}}}
+  });
+}
+
+function renderMonthlyBarChart(data) {
+  const labels = FM_LABELS;
+  mkChart('chartMonthlyBar','monthlyBar',{
+    data:{
+      labels,
+      datasets:[
+        {type:'bar',  label:'売上実績', data:mkMonthArr(data,'sales'), backgroundColor:'rgba(0,102,204,0.75)'},
+        {type:'bar',  label:'粗利額',   data:mkMonthArr(data,'gp'),    backgroundColor:'rgba(0,168,107,0.75)'},
+        {type:'line', label:'売上目標', data:S.targets.mSales,
+          borderColor:'#f59e0b', borderWidth:2, borderDash:[5,5],
+          pointRadius:4, fill:false, tension:0.3},
+      ]
+    },
+    options:{responsive:true,
+      plugins:{legend:{position:'top'}},
+      scales:{y:{ticks:{callback:fmtAxis}}}}
+  });
+}
+
+function renderCustPieChart(data) {
+  const cm = custMap(data);
+  const top9 = cm.slice(0,9);
+  const rest = cm.slice(9).reduce((s,[,v])=>s+v.sales,0);
+  if (rest>0) top9.push(['その他',{sales:rest,gp:0,cnt:0}]);
+  mkChart('chartCustPie','custPie',{
+    type:'doughnut',
+    data:{
+      labels: top9.map(([k])=>k),
+      datasets:[{data:top9.map(([,v])=>v.sales), backgroundColor:COLORS}]
+    },
+    options:{responsive:true,
+      plugins:{
+        legend:{position:'right',labels:{font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.raw)}}
+      }}
+  });
+}
+
+function mkChart(canvasId, key, cfg) {
+  if (S.charts[key]) S.charts[key].destroy();
+  S.charts[key] = new Chart(document.getElementById(canvasId).getContext('2d'), cfg);
+}
+
+// ================================================================
+// TABLES
+// ================================================================
+function renderSummaryTable(data) {
+  const nowFI = cm2fi(new Date().getMonth()+1);
+  const isCFY = S.year === currentFiscalYear();
+  let tSales=0, tGP=0;
+  const rows = Array.from({length:12},(_,fi)=>{
+    const cm=fm2cm(fi), md=data.filter(r=>r.month===cm);
+    const s=sum(md,'sales'), g=sum(md,'gp');
+    const t=S.targets.mSales[fi]||0;
+    const gpr=s?g/s*100:0;
+    const ach=t?s/t*100:null;
+    tSales+=s; tGP+=g;
+    const fade=isCFY&&fi>nowFI?'opacity:0.4;':'';
+    return `<tr style="${fade}">
+      <td><b>${FM_LABELS[fi]}</b></td>
+      <td class="text-right">${t?fmt(t):'-'}</td>
+      <td class="text-right">${s?fmt(s):'-'}</td>
+      <td class="text-right">${ach!==null?badge(ach):'-'}</td>
+      <td class="text-right">${g?fmt(g):'-'}</td>
+      <td class="text-right">${s?gpr.toFixed(1)+'%':'-'}</td>
+    </tr>`;
+  }).join('');
+  const tot = S.targets.mSales.reduce((a,b)=>a+b,0);
+  const tAch = tot?tSales/tot*100:null;
+  document.getElementById('tblSummary').innerHTML = rows +
+    `<tr class="summary-row">
+      <td>合計</td>
+      <td class="text-right">${tot?fmt(tot):'-'}</td>
+      <td class="text-right">${fmt(tSales)}</td>
+      <td class="text-right">${tAch!==null?badge(tAch):'-'}</td>
+      <td class="text-right">${tGP?fmt(tGP):'-'}</td>
+      <td class="text-right">${tSales?(tGP/tSales*100).toFixed(1)+'%':'-'}</td>
+    </tr>`;
+}
+
+function renderMonthlyTable(data) {
+  const nowFI = cm2fi(new Date().getMonth()+1);
+  const isCFY = S.year === currentFiscalYear();
+  document.getElementById('tblMonthly').innerHTML = Array.from({length:12},(_,fi)=>{
+    const cm=fm2cm(fi), md=data.filter(r=>r.month===cm);
+    const s=sum(md,'sales'), g=sum(md,'gp');
+    const st=S.targets.mSales[fi]||0, gt=S.targets.mGP[fi]||0;
+    const gpr=s?g/s*100:0;
+    const sAch=st?s/st*100:null, gAch=gt?g/gt*100:null;
+    const diff=s-st;
+    const fade=isCFY&&fi>nowFI?'opacity:0.4;':'';
+    const clickable = s > 0 ? `class="cust-row" onclick="showMonthDetail(${fi})"` : '';
+    return `<tr ${clickable} style="${fade}">
+      <td><b>${FM_LABELS[fi]}</b></td>
+      <td class="text-right">${st?fmt(st):'-'}</td>
+      <td class="text-right">${s?fmt(s):'-'}</td>
+      <td class="text-right">${sAch!==null?badge(sAch):'-'}</td>
+      <td class="text-right" style="color:${diff>=0?'#166534':'#991b1b'}">${st?(diff>=0?'+':'')+fmt(diff):'-'}</td>
+      <td class="text-right">${gt?fmt(gt):'-'}</td>
+      <td class="text-right">${g?fmt(g):'-'}</td>
+      <td class="text-right">${gAch!==null?badge(gAch):'-'}</td>
+      <td class="text-right">${s?gpr.toFixed(1)+'%':'-'}</td>
+      <td>${s>0?'›':''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCustomerTable(data) {
+  const cm = custMap(data);
+  const tSales = sum(data,'sales');
+  document.getElementById('tblCustomer').innerHTML = cm.map(([name,d],i)=>{
+    const gpr=d.sales?d.gp/d.sales*100:0;
+    const share=tSales?d.sales/tSales*100:0;
+    const esc = name.replace(/'/g,"\\'");
+    return `<tr class="cust-row" data-n="${name.toLowerCase()}" onclick="showCustomerDetail('${esc}')">
+      <td>${i+1}</td>
+      <td><b>${name}</b></td>
+      <td class="text-right">${fmt(d.sales)}</td>
+      <td class="text-right">${share.toFixed(1)}%</td>
+      <td class="text-right">${d.gp?fmt(d.gp):'-'}</td>
+      <td class="text-right">${d.gp?gpr.toFixed(1)+'%':'-'}</td>
+      <td class="text-right">${d.cnt}</td>
+      <td>›</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterCust(q) {
+  document.querySelectorAll('#tblCustomer tr').forEach(r=>{
+    r.style.display = (r.dataset.n||'').includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+// ================================================================
+// 得意先 詳細ビュー
+// ================================================================
+function showCustomerDetail(name) {
+  const allData = filtered();
+  S.custList = custMap(allData).map(([n]) => n);
+  S.custIdx  = S.custList.indexOf(name);
+  S.detailCust  = name;
+  S.detailMonth = null;
+  document.getElementById('custListView').style.display   = 'none';
+  document.getElementById('custDetailView').style.display = 'block';
+  populateDetailMonthSel(allData.filter(r => r.cust === name));
+  updateCustNav();
+  loadCustMemo(name);
+  renderCustDetail();
+}
+
+function populateDetailMonthSel(custData) {
+  const sel = document.getElementById('detailMonthSel');
+  if (!sel) return;
+  const opts = ['<option value="">通年</option>'];
+  for (let i = 0; i < 12; i++) {
+    const has = custData.some(r => r.month === fm2cm(i));
+    opts.push(`<option value="${i}"${has ? '' : ' disabled'}>${FM_LABELS[i]}${has ? '' : '（取引なし）'}</option>`);
+  }
+  sel.innerHTML = opts.join('');
+  sel.value = '';
+}
+
+function onDetailMonthChange() {
+  const v = document.getElementById('detailMonthSel').value;
+  S.detailMonth = v === '' ? null : +v;
+  renderCustDetail();
+}
+
+function renderCustDetail() {
+  const name = S.detailCust;
+  if (!name) return;
+  const fi   = S.detailMonth;
+  const calM = fi == null ? null : fm2cm(fi);
+  const allData  = filtered();
+  const custYear = allData.filter(r => r.cust === name);
+  const custData = fi == null ? custYear : custYear.filter(r => r.month === calM);
+
+  document.getElementById('detailCustName').textContent   = '🏢 ' + name;
+  document.getElementById('detailChartTitle').textContent =
+    name + '　月別 売上・粗利 推移' + (fi != null ? '（' + FM_LABELS[fi] + 'を強調）' : '');
+
+  const totalSales = sum(custData,'sales');
+  const totalGP    = sum(custData,'gp');
+  const gpr        = totalSales ? totalGP/totalSales*100 : 0;
+  const compData  = fi == null ? allData : allData.filter(r => r.month === calM);
+  const compSales = sum(compData,'sales');
+  const compGP    = sum(compData,'gp');
+  const share     = compSales ? totalSales/compSales*100 : 0;
+  const gpShare   = compGP    ? totalGP/compGP*100       : 0;
+  const avgGPR    = compSales ? compGP/compSales*100     : 0;
+
+  document.getElementById('d-kpi-sales-label').textContent = fi == null ? '📦 年間売上' : '📦 ' + FM_LABELS[fi] + ' 売上';
+  document.getElementById('d-kpi-sales').textContent     = fmt(totalSales);
+  document.getElementById('d-kpi-sales-sub').textContent = (fi == null ? '全体シェア: ' : FM_LABELS[fi] + 'のシェア: ') + share.toFixed(1) + '%';
+  document.getElementById('d-pb-sales').style.width      = Math.min(share,100) + '%';
+  document.getElementById('d-pb-sales-pct').textContent  = share.toFixed(1) + '%';
+
+  document.getElementById('d-kpi-gp').textContent     = fmt(totalGP);
+  document.getElementById('d-kpi-gp-sub').textContent = fi == null ? '年間粗利合計' : FM_LABELS[fi] + 'の粗利';
+  document.getElementById('d-pb-gp').style.width      = Math.min(gpShare,100) + '%';
+  document.getElementById('d-pb-gp-pct').textContent  = gpShare.toFixed(1) + '%（粗利シェア）';
+
+  document.getElementById('d-kpi-gpr').textContent     = gpr.toFixed(1) + '%';
+  document.getElementById('d-kpi-gpr-sub').textContent = '全体平均: ' + avgGPR.toFixed(1) + '%';
+  document.getElementById('d-pb-gpr').style.width      = Math.min(avgGPR ? gpr/avgGPR*100 : 0, 100) + '%';
+  document.getElementById('d-pb-gpr-pct').textContent  = gpr.toFixed(1) + '%';
+
+  const lblMonth = document.getElementById('d-kpi-month-label');
+  if (fi == null) {
+    lblMonth.textContent = '📅 今月の売上';
+    const cm     = new Date().getMonth()+1;
+    const mSales = sum(custYear.filter(r=>r.month===cm),'sales');
+    const mAll   = sum(allData.filter(r=>r.month===cm),'sales');
+    const mShare = mAll ? mSales/mAll*100 : 0;
+    document.getElementById('d-kpi-month').textContent     = fmt(mSales);
+    document.getElementById('d-kpi-month-sub').textContent = '今月シェア: ' + mShare.toFixed(1) + '%';
+    document.getElementById('d-pb-month').style.width      = Math.min(mShare,100) + '%';
+    document.getElementById('d-pb-month-pct').textContent  = mShare.toFixed(1) + '%';
+  } else {
+    lblMonth.textContent = '📋 取引件数';
+    const yc = custYear.length;
+    const cp = yc ? custData.length/yc*100 : 0;
+    document.getElementById('d-kpi-month').textContent     = custData.length + '件';
+    document.getElementById('d-kpi-month-sub').textContent = FM_LABELS[fi] + 'の取引';
+    document.getElementById('d-pb-month').style.width      = Math.min(cp,100) + '%';
+    document.getElementById('d-pb-month-pct').textContent  = '年間の ' + cp.toFixed(0) + '%';
+  }
+
+  const sSales = mkMonthArr(custYear,'sales');
+  const sGP    = mkMonthArr(custYear,'gp');
+  const baseS='rgba(0,102,204,0.75)', baseG='rgba(0,168,107,0.75)';
+  const fadeS='rgba(0,102,204,0.18)', fadeG='rgba(0,168,107,0.18)';
+  const colS = fi == null ? baseS : sSales.map((_,i)=>i===fi?baseS:fadeS);
+  const colG = fi == null ? baseG : sGP.map((_,i)=>i===fi?baseG:fadeG);
+  if (S.charts.detailMonthly) S.charts.detailMonthly.destroy();
+  S.charts.detailMonthly = new Chart(
+    document.getElementById('chartDetailMonthly').getContext('2d'), {
+      data: { labels: FM_LABELS, datasets: [
+        {type:'bar', label:'売上', data:sSales, backgroundColor:colS, yAxisID:'y'},
+        {type:'bar', label:'粗利', data:sGP,    backgroundColor:colG, yAxisID:'y'},
+      ]},
+      options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{ticks:{callback:fmtAxis}}}}
+    }
+  );
+
+  const nowFI = cm2fi(new Date().getMonth()+1);
+  const isCFY = S.year === currentFiscalYear();
+  const yTotalSales = sum(custYear,'sales');
+  const yTotalGP    = sum(custYear,'gp');
+  document.getElementById('tblDetailMonthly').innerHTML =
+    Array.from({length:12},(_,i)=>{
+      const calMi = fm2cm(i);
+      const md    = custYear.filter(r=>r.month===calMi);
+      const sv=sum(md,'sales'), gv=sum(md,'gp'), cnt=md.length;
+      const gprM = sv ? gv/sv*100 : 0;
+      let style='';
+      if (fi != null)            style = i===fi ? 'background:#eef4ff;font-weight:700;' : 'opacity:0.4;';
+      else if (isCFY && i>nowFI) style = 'opacity:0.4;';
+      return `<tr style="${style}">
+        <td><b>${FM_LABELS[i]}</b></td>
+        <td class="text-right">${sv?fmt(sv):'-'}</td>
+        <td class="text-right">${gv?fmt(gv):'-'}</td>
+        <td class="text-right">${sv?gprM.toFixed(1)+'%':'-'}</td>
+        <td class="text-right">${cnt||'-'}</td>
+      </tr>`;
+    }).join('') +
+    `<tr class="summary-row">
+      <td>合計</td>
+      <td class="text-right">${fmt(yTotalSales)}</td>
+      <td class="text-right">${yTotalGP?fmt(yTotalGP):'-'}</td>
+      <td class="text-right">${yTotalSales?(yTotalGP/yTotalSales*100).toFixed(1)+'%':'-'}</td>
+      <td class="text-right">${custYear.length}</td>
+    </tr>`;
+
+  const cy = {};
+  S.rows.filter(r => r.cust === name).forEach(r => {
+    const fy = fyOf(r);
+    if (!cy[fy]) cy[fy] = {sales:0, gp:0, cnt:0};
+    cy[fy].sales += r.sales; cy[fy].gp += r.gp; cy[fy].cnt++;
+  });
+  const cyArr = Object.entries(cy).map(([y,v]) => [+y, v]).sort((a,b)=>a[0]-b[0]);
+  renderCustDimBreakdown();
+  renderCustProducts(custData);
+
+  // 月次推移（この得意先・全期間・連続タイムライン）
+  const custAll = S.rows.filter(r => r.cust === name);
+  const maTitle = document.getElementById('detailMonthlyAllTitle');
+  if (maTitle) maTitle.textContent = name + '　月次 売上・粗利 推移（全期間）';
+  if (S.charts.detailMonthlyAll) S.charts.detailMonthlyAll.destroy();
+  const maCanvas = document.getElementById('chartDetailMonthlyAll');
+  if (maCanvas && custAll.length) {
+    const keyOf = r => r.year * 12 + (r.month - 1);
+    const agg = {};
+    custAll.forEach(r => { const k = keyOf(r); if (!agg[k]) agg[k] = {s:0, g:0}; agg[k].s += r.sales; agg[k].g += r.gp; });
+    const ks = custAll.map(keyOf);
+    const minK = Math.min(...ks), maxK = Math.max(...ks);
+    const labels = [], sArr = [], gArr = [];
+    for (let k = minK; k <= maxK; k++) {
+      const y = Math.floor(k / 12), m = (k % 12) + 1;
+      labels.push(y + '/' + m);
+      sArr.push(agg[k] ? agg[k].s : 0);
+      gArr.push(agg[k] ? agg[k].g : 0);
+    }
+    S.charts.detailMonthlyAll = new Chart(maCanvas.getContext('2d'), {
+      data: { labels, datasets: [
+        {type:'bar',  label:'売上', data:sArr, backgroundColor:'rgba(0,102,204,0.6)', yAxisID:'y', order:2},
+        {type:'line', label:'粗利', data:gArr, borderColor:'#00a86b', backgroundColor:'rgba(0,168,107,0.15)', borderWidth:2, pointRadius:2, tension:0.3, fill:false, yAxisID:'y', order:1},
+      ]},
+      options: {responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{ticks:{callback:fmtAxis}}, x:{ticks:{maxRotation:90, autoSkip:true, font:{size:10}}}}}
+    });
+  }
+
+  document.getElementById('detailYearTitle').textContent = name + '　年度別 売上・粗利 推移';
+  if (S.charts.detailYearly) S.charts.detailYearly.destroy();
+  S.charts.detailYearly = new Chart(
+    document.getElementById('chartDetailYearly').getContext('2d'), {
+      data:{ labels: cyArr.map(([y])=>y+'年度'), datasets:[
+        {type:'bar', label:'売上', data:cyArr.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)'},
+        {type:'bar', label:'粗利', data:cyArr.map(([,v])=>v.gp),    backgroundColor:'rgba(0,168,107,0.75)'},
+      ]},
+      options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{ticks:{callback:fmtAxis}}}}
+    }
+  );
+
+  let prevYS = null;
+  const tblDY = document.getElementById('tblDetailYearly');
+  if (tblDY) {
+    tblDY.innerHTML = cyArr.map(([y, v]) => {
+      const gprY = v.sales ? (v.gp / v.sales * 100) : 0;
+      const yoy  = (prevYS !== null && prevYS > 0) ? (v.sales - prevYS) / prevYS * 100 : null;
+      prevYS = v.sales;
+      const yoyCell = yoy !== null
+        ? `<span style="color:${yoy>=0?'#166534':'#991b1b'};font-weight:700;">${yoy>=0?'+':''}${yoy.toFixed(1)}%</span>`
+        : '<span style="color:#aaa;">—</span>';
+      const isSelYear = (y === S.year);
+      return `<tr style="${isSelYear ? 'background:#eef4ff;font-weight:700;' : ''}">
+        <td><b>${y}年度</b>${isSelYear ? ' <span style="font-size:10px;color:#0066cc;background:#dbeafe;padding:1px 6px;border-radius:4px;">選択中</span>' : ''}</td>
+        <td class="text-right">${fmt(v.sales)}</td>
+        <td class="text-right">${yoyCell}</td>
+        <td class="text-right">${v.gp ? fmt(v.gp) : '-'}</td>
+        <td class="text-right">${v.sales ? gprY.toFixed(1)+'%' : '-'}</td>
+        <td class="text-right">${v.cnt || '-'}</td>
+      </tr>`;
+    }).join('') +
+    (() => {
+      const totS = cyArr.reduce((a,[,v])=>a+v.sales,0);
+      const totG = cyArr.reduce((a,[,v])=>a+v.gp,0);
+      const totC = cyArr.reduce((a,[,v])=>a+v.cnt,0);
+      return `<tr class="summary-row">
+        <td>全期間合計</td>
+        <td class="text-right">${fmt(totS)}</td>
+        <td class="text-right">—</td>
+        <td class="text-right">${totG ? fmt(totG) : '-'}</td>
+        <td class="text-right">${totS ? (totG/totS*100).toFixed(1)+'%' : '-'}</td>
+        <td class="text-right">${totC}</td>
+      </tr>`;
+    })();
+  }
+}
+
+// ================================================================
+// 得意先詳細：メーカー / 品目分類別 内訳
+// ================================================================
+function valForDim(r, type){
+  let v;
+  if (type === 'maker')   v = (r.makerName && String(r.makerName).trim()) ? r.makerName : r.maker;
+  else                    v = (r.categoryName && String(r.categoryName).trim()) ? r.categoryName : r.category;
+  const none = type === 'maker' ? 'メーカー未設定' : '分類未設定';
+  return (v != null && String(v).trim()) ? String(v).trim() : none;
+}
+
+function switchCustDimType(type){
+  S.custDimType = type;
+  const bM = document.getElementById('btnCustDimMaker');
+  const bC = document.getElementById('btnCustDimCategory');
+  if (bM) bM.className = 'view-toggle-btn' + (type==='maker'?' active':'');
+  if (bC) bC.className = 'view-toggle-btn' + (type==='category'?' active':'');
+  renderCustDimBreakdown();
+}
+
+function renderCustDimBreakdown(){
+  const name = S.detailCust; if (!name) return;
+  const type = S.custDimType || 'maker';
+  const label = type === 'maker' ? 'メーカー' : '品目分類';
+  const fi = S.detailMonth;
+  const allData = filtered();
+  const custYear = allData.filter(r => r.cust === name);
+  const cd = fi == null ? custYear : custYear.filter(r => r.month === fm2cm(fi));
+
+  const m = {};
+  cd.forEach(r => { const k = valForDim(r, type); if(!m[k]) m[k]={sales:0,gp:0,cnt:0}; m[k].sales+=r.sales; m[k].gp+=r.gp; m[k].cnt++; });
+  const arr = Object.entries(m).sort((a,b)=>b[1].sales-a[1].sales);
+  const tSales = sum(cd,'sales');
+
+  const title = document.getElementById('custDimTitle');
+  if (title) title.textContent = label + '別 売上（' + name + (fi != null ? ' / ' + FM_LABELS[fi] : '') + '）';
+  const cn = document.getElementById('custDimColName'); if (cn) cn.textContent = label;
+
+  const body = document.getElementById('tblCustDim');
+  if (body) {
+    body.innerHTML = arr.map(([k,d],i)=>{
+      const gpr = d.sales?d.gp/d.sales*100:0;
+      const share = tSales?d.sales/tSales*100:0;
+      return `<tr>
+        <td>${i+1}</td>
+        <td><b>${k}</b></td>
+        <td class="text-right">${fmt(d.sales)}</td>
+        <td class="text-right">${share.toFixed(1)}%</td>
+        <td class="text-right">${d.gp?fmt(d.gp):'-'}</td>
+        <td class="text-right">${d.gp?gpr.toFixed(1)+'%':'-'}</td>
+        <td class="text-right">${d.cnt}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:#aaa;">データなし（' + label + 'の列が未設定の可能性があります）</td></tr>';
+  }
+
+  const top = arr.slice(0,10);
+  if (S.charts.custDim) S.charts.custDim.destroy();
+  const cv = document.getElementById('chartCustDim');
+  if (cv) {
+    S.charts.custDim = new Chart(cv.getContext('2d'), {
+      type:'bar',
+      data:{
+        labels: top.map(([k])=>String(k).length>14?String(k).slice(0,14)+'…':k),
+        datasets:[
+          {label:'売上',   data:top.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)'},
+          {label:'粗利額', data:top.map(([,v])=>v.gp),    backgroundColor:'rgba(0,168,107,0.75)'},
+        ]
+      },
+      options:{indexAxis:'y', responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{ticks:{callback:fmtAxis}}}}
+    });
+  }
+}
+
+// ================================================================
+// 得意先タブ 年度切替ビュー
+// ================================================================
+function switchCustViewMode(mode) {
+  S.custViewMode = mode;
+  const singleView  = document.getElementById('custSingleYearView');
+  const monthsView  = document.getElementById('custMonthsView');
+  const allView     = document.getElementById('custAllYearsView');
+  const btnYear     = document.getElementById('btnModeYear');
+  const btnMonths   = document.getElementById('btnModeMonths');
+  const btnAll      = document.getElementById('btnModeAllYears');
+  const hint        = document.getElementById('custViewModeHint');
+
+  [singleView, monthsView, allView].forEach(el => { if (el) el.style.display = 'none'; });
+  if (btnYear)   btnYear.className   = 'view-toggle-btn';
+  if (btnMonths) btnMonths.className = 'view-toggle-btn';
+  if (btnAll)    btnAll.className    = 'view-toggle-btn';
+
+  if (mode === 'months') {
+    if (monthsView) monthsView.style.display = 'block';
+    if (btnMonths)  btnMonths.className = 'view-toggle-btn active';
+    if (hint)       hint.textContent = '選択中の会計年度を得意先×月で集計';
+    if (S.rows.length) renderCustMonths();
+  } else if (mode === 'allyears') {
+    if (allView)   allView.style.display = 'block';
+    if (btnAll)    btnAll.className = 'view-toggle-btn active';
+    if (hint)      hint.textContent = '全データ（全年度）を得意先×年度で集計';
+    if (S.rows.length) renderCustAllYears();
+  } else {
+    if (singleView) singleView.style.display = 'block';
+    if (btnYear)    btnYear.className = 'view-toggle-btn active';
+    if (hint)       hint.textContent = '選択中の会計年度のデータを表示';
+  }
+}
+
+// 月比較（選択中の会計年度を 得意先 × 月 で集計）
+function renderCustMonths() {
+  const data = filtered();
+  const head = document.getElementById('custMonthsHead');
+  const body = document.getElementById('custMonthsBody');
+  if (!body) return;
+  if (head) {
+    head.innerHTML = `<tr>
+      <th style="position:sticky;left:0;background:#f4f6fb;z-index:2;">得意先</th><th>区分</th>
+      ${FM_LABELS.map(l=>`<th class="text-right">${l}</th>`).join('')}
+      <th class="text-right">合計</th>
+    </tr>`;
+  }
+  const cm = custMap(data);
+  const stick='position:sticky;left:0;background:#fff;z-index:1;';
+  const topB='border-top:2px solid #c7d0e0;';
+  const totS='font-weight:700;background:#f0f7ff;';
+  body.innerHTML = cm.map(([name])=>{
+    const cd   = data.filter(r=>r.cust===name);
+    const sArr = Array.from({length:12},(_,i)=>sum(cd.filter(r=>r.month===fm2cm(i)),'sales'));
+    const gArr = Array.from({length:12},(_,i)=>sum(cd.filter(r=>r.month===fm2cm(i)),'gp'));
+    const sTot = sArr.reduce((a,b)=>a+b,0), gTot = gArr.reduce((a,b)=>a+b,0);
+    const saleCells = sArr.map(v=>`<td class="text-right">${fmtK(v)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(sTot)}</td>`;
+    const gpCells   = gArr.map(v=>`<td class="text-right">${fmtK(v)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(gTot)}</td>`;
+    const rateCells = sArr.map((sv,i)=>`<td class="text-right">${sv?(gArr[i]/sv*100).toFixed(1)+'%':'-'}</td>`).join('') + `<td class="text-right" style="${totS}">${sTot?(gTot/sTot*100).toFixed(1)+'%':'-'}</td>`;
+    const dn = String(name).toLowerCase();
+    return `
+      <tr class="custmo-row" data-n="${dn}">
+        <td rowspan="3" style="${stick}${topB}font-weight:700;white-space:normal;min-width:130px;max-width:200px;vertical-align:top;">${name}</td>
+        <td style="${topB}font-weight:600;">売上</td>${saleCells}
+      </tr>
+      <tr class="custmo-row" data-n="${dn}"><td style="font-weight:600;">粗利額</td>${gpCells}</tr>
+      <tr class="custmo-row" data-n="${dn}"><td style="font-weight:600;color:#7c3aed;">粗利率</td>${rateCells}</tr>`;
+  }).join('');
+}
+function filterCustMonths(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#custMonthsBody tr.custmo-row').forEach(r=>{ r.style.display=(r.dataset.n||'').includes(q)?'':'none'; }); }
+
+function renderCustAllYears() {
+  if (!S.rows.length) return;
+
+  const years  = Array.from(new Set(S.rows.map(r => fyOf(r)))).sort((a,b)=>a-b);
+  const lastY  = years[years.length - 1];
+  const prevY  = years[years.length - 2];
+
+  const head = document.getElementById('custAllYearsHead');
+  if (head) {
+    head.innerHTML = `<tr>
+      <th style="position:sticky;left:0;background:#f4f6fb;z-index:2;">得意先</th>
+      <th>区分</th>
+      ${years.map(y => `<th class="text-right">${y}年度</th>`).join('')}
+      <th class="text-right">前年比</th>
+      <th class="text-right">全期間合計</th>
+    </tr>`;
+  }
+
+  const m = {};
+  S.rows.forEach(r => {
+    const fy = fyOf(r);
+    if (!m[r.cust]) m[r.cust] = {};
+    if (!m[r.cust][fy]) m[r.cust][fy] = {sales:0, gp:0, cnt:0};
+    m[r.cust][fy].sales += r.sales;
+    m[r.cust][fy].gp    += r.gp;
+    m[r.cust][fy].cnt++;
+  });
+
+  const arr = Object.entries(m).map(([name, ys]) => {
+    let s=0, g=0, c=0;
+    years.forEach(y => { if(ys[y]) { s+=ys[y].sales; g+=ys[y].gp; c+=ys[y].cnt; } });
+    return {name, ys, s, g, c};
+  }).sort((a,b) => b.s - a.s);
+
+  const stick = 'position:sticky;left:0;background:#fff;z-index:1;';
+  const topB  = 'border-top:2px solid #c7d0e0;';
+  const totS  = 'font-weight:700;background:#f0f7ff;';
+
+  const body = document.getElementById('custAllYearsBody');
+  if (body) {
+    body.innerHTML = arr.map(({name, ys, s, g}) => {
+      const saleCells  = years.map(y => `<td class="text-right">${fmtK(ys[y] ? ys[y].sales : 0)}</td>`).join('');
+      const gpCells    = years.map(y => `<td class="text-right">${fmtK(ys[y] ? ys[y].gp   : 0)}</td>`).join('');
+      const rateCells  = years.map(y => {
+        const o = ys[y];
+        return `<td class="text-right">${o && o.sales ? (o.gp/o.sales*100).toFixed(1)+'%' : '-'}</td>`;
+      }).join('');
+
+      let yoyCell = '<td class="text-right" rowspan="3" style="vertical-align:middle;">—</td>';
+      if (prevY && ys[lastY] && ys[prevY] && ys[prevY].sales) {
+        const yoy = (ys[lastY].sales - ys[prevY].sales) / ys[prevY].sales * 100;
+        const col = yoy >= 0 ? '#166534' : '#991b1b';
+        yoyCell = `<td class="text-right" rowspan="3" style="vertical-align:middle;${topB}">
+          <span style="color:${col};font-weight:700;">${yoy>=0?'+':''}${yoy.toFixed(1)}%</span><br>
+          <span style="font-size:10px;color:#aaa;">${lastY}年度</span>
+        </td>`;
+      }
+
+      const dn = name.toLowerCase();
+      return `
+        <tr class="cay-row" data-n="${dn}">
+          <td rowspan="3" style="${stick}${topB}font-weight:700;white-space:normal;min-width:130px;max-width:200px;vertical-align:top;">${name}</td>
+          <td style="${topB}font-weight:600;">売上</td>${saleCells}
+          ${yoyCell}
+          <td class="text-right" style="${topB}${totS}">${fmtK(s)}</td>
+        </tr>
+        <tr class="cay-row" data-n="${dn}">
+          <td style="font-weight:600;">粗利額</td>${gpCells}
+          <td class="text-right" style="${totS}">${fmtK(g)}</td>
+        </tr>
+        <tr class="cay-row" data-n="${dn}">
+          <td style="font-weight:600;color:#7c3aed;">粗利率</td>${rateCells}
+          <td class="text-right" style="${totS}">${s ? (g/s*100).toFixed(1)+'%' : '-'}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  const top10 = arr.slice(0, 10);
+  if (S.charts.custYearTrend) S.charts.custYearTrend.destroy();
+  const trendCanvas = document.getElementById('chartCustYearTrend');
+  if (trendCanvas) {
+    S.charts.custYearTrend = new Chart(trendCanvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: years.map(y => y + '年度'),
+        datasets: top10.map((c, i) => ({
+          label: c.name.length > 12 ? c.name.slice(0,12)+'…' : c.name,
+          data: years.map(y => c.ys[y] ? c.ys[y].sales : 0),
+          borderColor:     COLORS[i % COLORS.length],
+          backgroundColor: COLORS[i % COLORS.length] + '22',
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.3,
+          fill: false,
+        }))
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } } },
+        scales:  { y: { ticks: { callback: fmtAxis } } }
+      }
+    });
+  }
+}
+
+function filterCustAllYears(q) {
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('#custAllYearsBody tr.cay-row').forEach(r => {
+    r.style.display = (r.dataset.n || '').includes(q) ? '' : 'none';
+  });
+}
+
+function fyOf(r){ return r.month >= 4 ? r.year : r.year - 1; }
+
+function yearMap() {
+  const m = {};
+  S.rows.forEach(r => {
+    const fy = fyOf(r);
+    if (!m[fy]) m[fy] = {sales:0, gp:0, cnt:0};
+    m[fy].sales += r.sales; m[fy].gp += r.gp; m[fy].cnt++;
+  });
+  return Object.entries(m).map(([y,v]) => [+y, v]).sort((a,b) => a[0]-b[0]);
+}
+
+function renderYearly() {
+  const empty = document.getElementById('yearlyEmpty');
+  if (!S.rows.length) { if (empty) empty.style.display='block'; return; }
+  if (empty) empty.style.display='none';
+  const ym = yearMap();
+  const labels = ym.map(([y]) => y + '年度');
+  mkChart('chartYearly','yearly',{
+    data:{ labels, datasets:[
+      {type:'bar',  label:'売上',      data:ym.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)', yAxisID:'y'},
+      {type:'bar',  label:'粗利',      data:ym.map(([,v])=>v.gp),    backgroundColor:'rgba(0,168,107,0.75)', yAxisID:'y'},
+      {type:'line', label:'粗利率(%)', data:ym.map(([,v])=>v.sales?+(v.gp/v.sales*100).toFixed(1):0),
+        borderColor:'#7c3aed', borderWidth:2, pointRadius:4, fill:false, tension:0.3, yAxisID:'y1'},
+    ]},
+    options:{responsive:true, plugins:{legend:{position:'top'}},
+      scales:{ y:{ticks:{callback:fmtAxis}}, y1:{position:'right', grid:{drawOnChartArea:false}, ticks:{callback:v=>v+'%'}} }}
+  });
+  let prev=null;
+  document.getElementById('tblYearly').innerHTML = ym.map(([y,v])=>{
+    const gpr = v.sales ? v.gp/v.sales*100 : 0;
+    const yoy = (prev && prev.sales) ? (v.sales-prev.sales)/prev.sales*100 : null;
+    prev = v;
+    const yoyCell = yoy==null ? '-' : `<span style="color:${yoy>=0?'#166534':'#991b1b'}">${yoy>=0?'+':''}${yoy.toFixed(1)}%</span>`;
+    return `<tr>
+      <td><b>${y}年度</b></td>
+      <td class="text-right">${fmt(v.sales)}</td>
+      <td class="text-right">${yoyCell}</td>
+      <td class="text-right">${v.gp?fmt(v.gp):'-'}</td>
+      <td class="text-right">${v.sales?gpr.toFixed(1)+'%':'-'}</td>
+      <td class="text-right">${v.cnt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function fmtK(n){ return n ? Math.round(n/1000).toLocaleString('ja-JP') : '-'; }
+
+function renderMatrix(data) {
+  const empty = document.getElementById('matrixEmpty');
+  const body  = document.getElementById('mtxBody');
+  if (!data || !data.length) { if (empty) empty.style.display='block'; if (body) body.innerHTML=''; return; }
+  if (empty) empty.style.display='none';
+  const cm = custMap(data);
+  const stick = 'position:sticky;left:0;background:#fff;z-index:1;';
+  const topB = 'border-top:2px solid #c7d0e0;';
+  const totS = 'font-weight:700;background:#f0f7ff;';
+  body.innerHTML = cm.map(([name]) => {
+    const cd   = data.filter(r => r.cust === name);
+    const sArr = Array.from({length:12},(_,i)=>sum(cd.filter(r=>r.month===fm2cm(i)),'sales'));
+    const gArr = Array.from({length:12},(_,i)=>sum(cd.filter(r=>r.month===fm2cm(i)),'gp'));
+    const sTot = sArr.reduce((a,b)=>a+b,0), gTot = gArr.reduce((a,b)=>a+b,0);
+    const saleCells = sArr.map(v=>`<td class="text-right">${fmtK(v)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(sTot)}</td>`;
+    const gpCells   = gArr.map(v=>`<td class="text-right">${fmtK(v)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(gTot)}</td>`;
+    const rateCells = sArr.map((sv,i)=>`<td class="text-right">${sv?(gArr[i]/sv*100).toFixed(1)+'%':'-'}</td>`).join('') + `<td class="text-right" style="${totS}">${sTot?(gTot/sTot*100).toFixed(1)+'%':'-'}</td>`;
+    const dn = name.toLowerCase();
+    return `
+      <tr class="mtx-cust" data-n="${dn}">
+        <td rowspan="3" style="${stick}${topB}font-weight:700;white-space:normal;min-width:170px;max-width:220px;vertical-align:top;">
+          <div>${name}</div>
+          <textarea class="mtx-memo" data-cust="${escAttr(name)}" placeholder="📝 メモ" oninput="saveMatrixMemo(this)">${escHtml(getCustMemo(name))}</textarea>
+        </td>
+        <td style="${topB}font-weight:600;">売上</td>${saleCells}
+      </tr>
+      <tr class="mtx-cust" data-n="${dn}"><td style="font-weight:600;">粗利額</td>${gpCells}</tr>
+      <tr class="mtx-cust" data-n="${dn}"><td style="font-weight:600;color:#7c3aed;">粗利率</td>${rateCells}</tr>`;
+  }).join('');
+}
+function filterMatrix(q) {
+  q = (q||'').toLowerCase();
+  document.querySelectorAll('#mtxBody tr.mtx-cust').forEach(r => { r.style.display = (r.dataset.n||'').includes(q) ? '' : 'none'; });
+}
+
+function renderYMatrix() {
+  const empty = document.getElementById('ymatrixEmpty');
+  const head  = document.getElementById('ymtxHead');
+  const body  = document.getElementById('ymtxBody');
+  if (!S.rows.length) { if (empty) empty.style.display='block'; if (head) head.innerHTML=''; if (body) body.innerHTML=''; return; }
+  if (empty) empty.style.display='none';
+
+  const years = Array.from(new Set(S.rows.map(r => fyOf(r)))).sort((a,b)=>a-b);
+  head.innerHTML = `<tr>
+    <th style="position:sticky;left:0;background:#f4f6fb;z-index:2;">得意先</th><th>区分</th>
+    ${years.map(y=>`<th class="text-right">${y}年度</th>`).join('')}
+    <th class="text-right">合計</th>
+  </tr>`;
+
+  const m = {};
+  S.rows.forEach(r => {
+    const fy = fyOf(r);
+    (m[r.cust] = m[r.cust] || {});
+    (m[r.cust][fy] = m[r.cust][fy] || {sales:0, gp:0, cnt:0});
+    m[r.cust][fy].sales += r.sales; m[r.cust][fy].gp += r.gp; m[r.cust][fy].cnt++;
+  });
+
+  const arr = Object.entries(m).map(([name, ys]) => {
+    let s=0, g=0, c=0; years.forEach(y=>{ if(ys[y]){ s+=ys[y].sales; g+=ys[y].gp; c+=ys[y].cnt; } });
+    return {name, ys, s, g, c};
+  }).sort((a,b)=>b.s-a.s);
+
+  const stick = 'position:sticky;left:0;background:#fff;z-index:1;';
+  const topB  = 'border-top:2px solid #c7d0e0;';
+  const totS  = 'font-weight:700;background:#f0f7ff;';
+  body.innerHTML = arr.map(({name, ys, s, g, c}) => {
+    const saleCells = years.map(y=>`<td class="text-right">${fmtK(ys[y]?ys[y].sales:0)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(s)}</td>`;
+    const gpCells   = years.map(y=>`<td class="text-right">${fmtK(ys[y]?ys[y].gp:0)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(g)}</td>`;
+    const rateCells = years.map(y=>{ const o=ys[y]; return `<td class="text-right">${o&&o.sales?(o.gp/o.sales*100).toFixed(1)+'%':'-'}</td>`; }).join('') + `<td class="text-right" style="${totS}">${s?(g/s*100).toFixed(1)+'%':'-'}</td>`;
+    const cntCells  = years.map(y=>{ const o=ys[y]; return `<td class="text-right">${o&&o.cnt?o.cnt:'-'}</td>`; }).join('') + `<td class="text-right" style="${totS}">${c}</td>`;
+    const dn = name.toLowerCase();
+    return `
+      <tr class="ymtx-cust" data-n="${dn}">
+        <td rowspan="4" style="${stick}${topB}font-weight:700;white-space:normal;min-width:150px;max-width:220px;vertical-align:top;">${name}</td>
+        <td style="${topB}font-weight:600;">売上</td>${saleCells}
+      </tr>
+      <tr class="ymtx-cust" data-n="${dn}"><td style="font-weight:600;">粗利額</td>${gpCells}</tr>
+      <tr class="ymtx-cust" data-n="${dn}"><td style="font-weight:600;color:#7c3aed;">粗利率</td>${rateCells}</tr>
+      <tr class="ymtx-cust" data-n="${dn}"><td style="font-weight:600;color:#0066cc;">件数</td>${cntCells}</tr>`;
+  }).join('');
+}
+function filterYMatrix(q) {
+  q = (q||'').toLowerCase();
+  document.querySelectorAll('#ymtxBody tr.ymtx-cust').forEach(r => { r.style.display = (r.dataset.n||'').includes(q) ? '' : 'none'; });
+}
+
+// ================================================================
+// 分類別分析（メーカー / 品目分類）
+// ================================================================
+const DIM_CONFIG = {
+  maker:    { label:'メーカー',   icon:'🏭', none:'メーカー未設定' },
+  category: { label:'品目分類',   icon:'📦', none:'分類未設定' },
+};
+function dimCfg(){ return DIM_CONFIG[S.dimType] || DIM_CONFIG.maker; }
+function dimValOf(r){
+  let v;
+  if (S.dimType === 'maker')         v = (r.makerName && String(r.makerName).trim()) ? r.makerName : r.maker;
+  else if (S.dimType === 'category') v = (r.categoryName && String(r.categoryName).trim()) ? r.categoryName : r.category;
+  else                               v = r[S.dimType];
+  return (v != null && String(v).trim()) ? String(v).trim() : dimCfg().none;
+}
+function dimHasCol(){
+  if (S.dimType === 'maker')    return !!(S.map.makerName || S.map.maker);
+  if (S.dimType === 'category') return !!(S.map.categoryName || S.map.category);
+  return !!S.map[S.dimType];
+}
+
+function dimMap(data){
+  const m = {};
+  data.forEach(r => {
+    const k = dimValOf(r);
+    if (!m[k]) m[k] = {sales:0, gp:0, cnt:0};
+    m[k].sales += r.sales; m[k].gp += r.gp; m[k].cnt++;
+  });
+  return Object.entries(m).sort((a,b)=>b[1].sales-a[1].sales);
+}
+
+function switchDimType(type){
+  S.dimType = type;
+  [['maker','btnDimMaker'],['category','btnDimCategory']].forEach(([t,id])=>{
+    const b = document.getElementById(id); if (b) b.className = 'view-toggle-btn' + (t===type?' active':'');
+  });
+  const cfg = dimCfg();
+  const hint = document.getElementById('dimTypeHint'); if (hint) hint.textContent = cfg.label + '別に集計';
+  const cn = document.getElementById('dimColName'); if (cn) cn.textContent = cfg.label;
+  const tt = document.getElementById('dimTableTitle'); if (tt) tt.innerHTML = cfg.label + '別 売上分析　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックで詳細表示</span>';
+  const bt = document.getElementById('dimBarTitle'); if (bt) bt.textContent = cfg.label + '別 売上 TOP10';
+  const mt = document.getElementById('dimMonthsTitle'); if (mt) mt.innerHTML = cfg.label + ' × 月 比較表　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）／選択中の会計年度・売上順</span>';
+  const at = document.getElementById('dimAllYearsTitle'); if (at) at.innerHTML = cfg.label + ' × 年度 比較　<span style="font-size:12px;font-weight:400;color:#aaa;">単位: 千円（粗利率は%）/ 全期間・売上順</span>';
+  const yt = document.getElementById('dimYearTrendTitle'); if (yt) yt.textContent = cfg.label + '別 年度推移（上位10件・売上）';
+  backToDimList();
+  if (S.rows.length) renderDim(filtered());
+}
+
+function switchDimViewMode(mode){
+  S.dimViewMode = mode;
+  const single = document.getElementById('dimSingleYearView');
+  const months = document.getElementById('dimMonthsView');
+  const all    = document.getElementById('dimAllYearsView');
+  const bY = document.getElementById('btnDimModeYear');
+  const bM = document.getElementById('btnDimModeMonths');
+  const bA = document.getElementById('btnDimModeAllYears');
+  const hint = document.getElementById('dimViewModeHint');
+  [single,months,all].forEach(el=>{ if(el) el.style.display='none'; });
+  if (bY) bY.className='view-toggle-btn';
+  if (bM) bM.className='view-toggle-btn';
+  if (bA) bA.className='view-toggle-btn';
+  if (mode === 'months'){
+    if (months) months.style.display='block';
+    if (bM) bM.className='view-toggle-btn active';
+    if (hint) hint.textContent = '選択中の会計年度を ' + dimCfg().label + ' ×月で集計';
+    if (S.rows.length) renderDimMonths();
+  } else if (mode === 'allyears'){
+    if (all) all.style.display='block';
+    if (bA) bA.className='view-toggle-btn active';
+    if (hint) hint.textContent = '全データ（全年度）を ' + dimCfg().label + ' ×年度で集計';
+    if (S.rows.length) renderDimAllYears();
+  } else {
+    if (single) single.style.display='block';
+    if (bY) bY.className='view-toggle-btn active';
+    if (hint) hint.textContent = '選択中の会計年度のデータを表示';
+  }
+}
+
+function renderDim(data){
+  const empty = document.getElementById('dimEmpty');
+  const listV = document.getElementById('dimListView');
+  const detailV = document.getElementById('dimDetailView');
+  if (!S.rows.length){ if(empty)empty.style.display='block'; if(listV)listV.style.display='none'; if(detailV)detailV.style.display='none'; return; }
+  if (empty) empty.style.display='none';
+  if (listV && (!detailV || detailV.style.display!=='block')) listV.style.display='block';
+
+  const noCol = document.getElementById('dimNoCol');
+  if (noCol) noCol.style.display = dimHasCol() ? 'none' : 'block';
+
+  fillTabKPI('di', data);
+
+  if (S.dimViewMode === 'months') renderDimMonths();
+  else if (S.dimViewMode === 'allyears') renderDimAllYears();
+  else { renderDimTable(data); renderDimBar(data); renderDimPie(data); }
+}
+
+function renderDimTable(data){
+  const dm = dimMap(data);
+  const tSales = sum(data,'sales');
+  const body = document.getElementById('tblDim');
+  if (!body) return;
+  body.innerHTML = dm.map(([name,d],i)=>{
+    const gpr = d.sales?d.gp/d.sales*100:0;
+    const share = tSales?d.sales/tSales*100:0;
+    const esc = String(name).replace(/'/g,"\\'");
+    return `<tr class="cust-row" data-n="${String(name).toLowerCase()}" onclick="showDimDetail('${esc}')">
+      <td>${i+1}</td>
+      <td><b>${name}</b></td>
+      <td class="text-right">${fmt(d.sales)}</td>
+      <td class="text-right">${share.toFixed(1)}%</td>
+      <td class="text-right">${d.gp?fmt(d.gp):'-'}</td>
+      <td class="text-right">${d.gp?gpr.toFixed(1)+'%':'-'}</td>
+      <td class="text-right">${d.cnt}</td>
+      <td>›</td>
+    </tr>`;
+  }).join('');
+}
+function filterDim(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#tblDim tr').forEach(r=>{ r.style.display=(r.dataset.n||'').includes(q)?'':'none'; }); }
+
+function renderDimBar(data){
+  const dm = dimMap(data).slice(0,10);
+  mkChart('chartDimBar','dimBar',{
+    type:'bar',
+    data:{
+      labels: dm.map(([k])=>String(k).length>14?String(k).slice(0,14)+'…':k),
+      datasets:[
+        {label:'売上',   data:dm.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)'},
+        {label:'粗利額', data:dm.map(([,v])=>v.gp),    backgroundColor:'rgba(0,168,107,0.75)'},
+      ]
+    },
+    options:{indexAxis:'y', responsive:true, plugins:{legend:{position:'top'}}, scales:{x:{ticks:{callback:fmtAxis}}}}
+  });
+}
+
+function renderDimPie(data){
+  const dm = dimMap(data);
+  const top9 = dm.slice(0,9);
+  const rest = dm.slice(9).reduce((s,[,v])=>s+v.sales,0);
+  const pie = [...top9];
+  if (rest>0) pie.push(['その他',{sales:rest,gp:0,cnt:0}]);
+  mkChart('chartDimPie','dimPie',{
+    type:'doughnut',
+    data:{ labels: pie.map(([k])=>k), datasets:[{data:pie.map(([,v])=>v.sales), backgroundColor:COLORS}] },
+    options:{responsive:true, plugins:{legend:{position:'right',labels:{font:{size:11}}}, tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.raw)}}}}
+  });
+}
+
+// 月比較（選択中の会計年度を 分類軸 × 月 で集計）
+function renderDimMonths(){
+  const data = filtered();
+  const head = document.getElementById('dimMonthsHead');
+  const body = document.getElementById('dimMonthsBody');
+  if (!body) return;
+  if (head){
+    head.innerHTML = `<tr>
+      <th style="position:sticky;left:0;background:#f4f6fb;z-index:2;">${dimCfg().label}</th><th>区分</th>
+      ${FM_LABELS.map(l=>`<th class="text-right">${l}</th>`).join('')}
+      <th class="text-right">合計</th>
+    </tr>`;
+  }
+  const dm = dimMap(data);
+  const stick='position:sticky;left:0;background:#fff;z-index:1;';
+  const topB='border-top:2px solid #c7d0e0;';
+  const totS='font-weight:700;background:#f0f7ff;';
+  body.innerHTML = dm.map(([name])=>{
+    const cd   = data.filter(r=>dimValOf(r)===name);
+    const sArr = Array.from({length:12},(_,i)=>sum(cd.filter(r=>r.month===fm2cm(i)),'sales'));
+    const gArr = Array.from({length:12},(_,i)=>sum(cd.filter(r=>r.month===fm2cm(i)),'gp'));
+    const sTot = sArr.reduce((a,b)=>a+b,0), gTot = gArr.reduce((a,b)=>a+b,0);
+    const saleCells = sArr.map(v=>`<td class="text-right">${fmtK(v)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(sTot)}</td>`;
+    const gpCells   = gArr.map(v=>`<td class="text-right">${fmtK(v)}</td>`).join('') + `<td class="text-right" style="${totS}">${fmtK(gTot)}</td>`;
+    const rateCells = sArr.map((sv,i)=>`<td class="text-right">${sv?(gArr[i]/sv*100).toFixed(1)+'%':'-'}</td>`).join('') + `<td class="text-right" style="${totS}">${sTot?(gTot/sTot*100).toFixed(1)+'%':'-'}</td>`;
+    const dn = String(name).toLowerCase();
+    return `
+      <tr class="dimmo-row" data-n="${dn}">
+        <td rowspan="3" style="${stick}${topB}font-weight:700;white-space:normal;min-width:130px;max-width:200px;vertical-align:top;">${name}</td>
+        <td style="${topB}font-weight:600;">売上</td>${saleCells}
+      </tr>
+      <tr class="dimmo-row" data-n="${dn}"><td style="font-weight:600;">粗利額</td>${gpCells}</tr>
+      <tr class="dimmo-row" data-n="${dn}"><td style="font-weight:600;color:#7c3aed;">粗利率</td>${rateCells}</tr>`;
+  }).join('');
+}
+function filterDimMonths(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#dimMonthsBody tr.dimmo-row').forEach(r=>{ r.style.display=(r.dataset.n||'').includes(q)?'':'none'; }); }
+
+function renderDimAllYears(){
+  if (!S.rows.length) return;
+  const years = Array.from(new Set(S.rows.map(r=>fyOf(r)))).sort((a,b)=>a-b);
+  const lastY = years[years.length-1];
+  const prevY = years[years.length-2];
+  const head = document.getElementById('dimAllYearsHead');
+  if (head){
+    head.innerHTML = `<tr>
+      <th style="position:sticky;left:0;background:#f4f6fb;z-index:2;">${dimCfg().label}</th>
+      <th>区分</th>
+      ${years.map(y=>`<th class="text-right">${y}年度</th>`).join('')}
+      <th class="text-right">前年比</th>
+      <th class="text-right">全期間合計</th>
+    </tr>`;
+  }
+  const m = {};
+  S.rows.forEach(r=>{
+    const k = dimValOf(r); const fy = fyOf(r);
+    if(!m[k]) m[k]={};
+    if(!m[k][fy]) m[k][fy]={sales:0,gp:0,cnt:0};
+    m[k][fy].sales+=r.sales; m[k][fy].gp+=r.gp; m[k][fy].cnt++;
+  });
+  const arr = Object.entries(m).map(([name,ys])=>{
+    let s=0,g=0,c=0; years.forEach(y=>{ if(ys[y]){ s+=ys[y].sales; g+=ys[y].gp; c+=ys[y].cnt; } });
+    return {name,ys,s,g,c};
+  }).sort((a,b)=>b.s-a.s);
+  const stick='position:sticky;left:0;background:#fff;z-index:1;';
+  const topB='border-top:2px solid #c7d0e0;';
+  const totS='font-weight:700;background:#f0f7ff;';
+  const body = document.getElementById('dimAllYearsBody');
+  if (body){
+    body.innerHTML = arr.map(({name,ys,s,g})=>{
+      const saleCells = years.map(y=>`<td class="text-right">${fmtK(ys[y]?ys[y].sales:0)}</td>`).join('');
+      const gpCells   = years.map(y=>`<td class="text-right">${fmtK(ys[y]?ys[y].gp:0)}</td>`).join('');
+      const rateCells = years.map(y=>{ const o=ys[y]; return `<td class="text-right">${o&&o.sales?(o.gp/o.sales*100).toFixed(1)+'%':'-'}</td>`; }).join('');
+      let yoyCell = '<td class="text-right" rowspan="3" style="vertical-align:middle;">—</td>';
+      if (prevY && ys[lastY] && ys[prevY] && ys[prevY].sales){
+        const yoy=(ys[lastY].sales-ys[prevY].sales)/ys[prevY].sales*100;
+        const col=yoy>=0?'#166534':'#991b1b';
+        yoyCell=`<td class="text-right" rowspan="3" style="vertical-align:middle;${topB}"><span style="color:${col};font-weight:700;">${yoy>=0?'+':''}${yoy.toFixed(1)}%</span><br><span style="font-size:10px;color:#aaa;">${lastY}年度</span></td>`;
+      }
+      const dn=String(name).toLowerCase();
+      return `
+        <tr class="dimay-row" data-n="${dn}">
+          <td rowspan="3" style="${stick}${topB}font-weight:700;white-space:normal;min-width:130px;max-width:200px;vertical-align:top;">${name}</td>
+          <td style="${topB}font-weight:600;">売上</td>${saleCells}
+          ${yoyCell}
+          <td class="text-right" style="${topB}${totS}">${fmtK(s)}</td>
+        </tr>
+        <tr class="dimay-row" data-n="${dn}"><td style="font-weight:600;">粗利額</td>${gpCells}<td class="text-right" style="${totS}">${fmtK(g)}</td></tr>
+        <tr class="dimay-row" data-n="${dn}"><td style="font-weight:600;color:#7c3aed;">粗利率</td>${rateCells}<td class="text-right" style="${totS}">${s?(g/s*100).toFixed(1)+'%':'-'}</td></tr>`;
+    }).join('');
+  }
+  const top10 = arr.slice(0,10);
+  if (S.charts.dimYearTrend) S.charts.dimYearTrend.destroy();
+  const cv = document.getElementById('chartDimYearTrend');
+  if (cv){
+    S.charts.dimYearTrend = new Chart(cv.getContext('2d'), {
+      type:'line',
+      data:{ labels: years.map(y=>y+'年度'),
+        datasets: top10.map((c,i)=>({
+          label: String(c.name).length>12?String(c.name).slice(0,12)+'…':c.name,
+          data: years.map(y=>c.ys[y]?c.ys[y].sales:0),
+          borderColor:COLORS[i%COLORS.length], backgroundColor:COLORS[i%COLORS.length]+'22',
+          borderWidth:2, pointRadius:4, tension:0.3, fill:false,
+        }))
+      },
+      options:{responsive:true, plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12}}}, scales:{y:{ticks:{callback:fmtAxis}}}}
+    });
+  }
+}
+function filterDimAllYears(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#dimAllYearsBody tr.dimay-row').forEach(r=>{ r.style.display=(r.dataset.n||'').includes(q)?'':'none'; }); }
+
+// ---- 分類別 詳細ビュー ----
+function showDimDetail(name){
+  const allData = filtered();
+  S.dimList = dimMap(allData).map(([n])=>n);
+  S.dimIdx = S.dimList.indexOf(name);
+  S.detailDim = name;
+  S.detailDimMonth = null;
+  document.getElementById('dimListView').style.display='none';
+  document.getElementById('dimDetailView').style.display='block';
+  populateDimDetailMonthSel(allData.filter(r=>dimValOf(r)===name));
+  updateDimNav();
+  renderDimDetail();
+}
+
+function populateDimDetailMonthSel(dd){
+  const sel=document.getElementById('dimDetailMonthSel'); if(!sel)return;
+  const opts=['<option value="">通年</option>'];
+  for(let i=0;i<12;i++){ const has=dd.some(r=>r.month===fm2cm(i)); opts.push(`<option value="${i}"${has?'':' disabled'}>${FM_LABELS[i]}${has?'':'（取引なし）'}</option>`); }
+  sel.innerHTML=opts.join(''); sel.value='';
+}
+function onDimDetailMonthChange(){ const v=document.getElementById('dimDetailMonthSel').value; S.detailDimMonth=v===''?null:+v; renderDimDetail(); }
+function updateDimNav(){
+  const total=S.dimList.length, idx=S.dimIdx;
+  const c=document.getElementById('dimNavCounter'); if(c)c.textContent=(idx+1)+' / '+total;
+  const p=document.getElementById('btnPrevDim'); if(p)p.disabled=idx<=0;
+  const n=document.getElementById('btnNextDim'); if(n)n.disabled=idx>=total-1;
+}
+function prevDim(){ if(S.dimIdx>0){ S.dimIdx--; showDimDetail(S.dimList[S.dimIdx]); } }
+function nextDim(){ if(S.dimIdx<S.dimList.length-1){ S.dimIdx++; showDimDetail(S.dimList[S.dimIdx]); } }
+function backToDimList(){
+  const dv=document.getElementById('dimDetailView'); if(dv)dv.style.display='none';
+  const lv=document.getElementById('dimListView'); if(lv && S.rows.length)lv.style.display='block';
+}
+
+function renderDimDetail(){
+  const name=S.detailDim; if(name==null)return;
+  const fi=S.detailDimMonth;
+  const calM = fi==null?null:fm2cm(fi);
+  const allData=filtered();
+  const dimYear=allData.filter(r=>dimValOf(r)===name);
+  const dimData=fi==null?dimYear:dimYear.filter(r=>r.month===calM);
+  const cfg=dimCfg();
+
+  document.getElementById('dimDetailName').textContent = cfg.icon+' '+name;
+  document.getElementById('dimDetailChartTitle').textContent = name+'　月別 売上・粗利 推移'+(fi!=null?'（'+FM_LABELS[fi]+'を強調）':'');
+
+  const totalSales=sum(dimData,'sales'), totalGP=sum(dimData,'gp');
+  const gpr=totalSales?totalGP/totalSales*100:0;
+  const compData=fi==null?allData:allData.filter(r=>r.month===calM);
+  const compSales=sum(compData,'sales'), compGP=sum(compData,'gp');
+  const share=compSales?totalSales/compSales*100:0;
+  const gpShare=compGP?totalGP/compGP*100:0;
+  const avgGPR=compSales?compGP/compSales*100:0;
+
+  document.getElementById('dd-kpi-sales-label').textContent = fi==null?'📦 年間売上':'📦 '+FM_LABELS[fi]+' 売上';
+  document.getElementById('dd-kpi-sales').textContent=fmt(totalSales);
+  document.getElementById('dd-kpi-sales-sub').textContent=(fi==null?'全体シェア: ':FM_LABELS[fi]+'のシェア: ')+share.toFixed(1)+'%';
+  document.getElementById('dd-pb-sales').style.width=Math.min(share,100)+'%';
+  document.getElementById('dd-pb-sales-pct').textContent=share.toFixed(1)+'%';
+
+  document.getElementById('dd-kpi-gp').textContent=fmt(totalGP);
+  document.getElementById('dd-kpi-gp-sub').textContent=fi==null?'年間粗利合計':FM_LABELS[fi]+'の粗利';
+  document.getElementById('dd-pb-gp').style.width=Math.min(gpShare,100)+'%';
+  document.getElementById('dd-pb-gp-pct').textContent=gpShare.toFixed(1)+'%（粗利シェア）';
+
+  document.getElementById('dd-kpi-gpr').textContent=gpr.toFixed(1)+'%';
+  document.getElementById('dd-kpi-gpr-sub').textContent='全体平均: '+avgGPR.toFixed(1)+'%';
+  document.getElementById('dd-pb-gpr').style.width=Math.min(avgGPR?gpr/avgGPR*100:0,100)+'%';
+  document.getElementById('dd-pb-gpr-pct').textContent=gpr.toFixed(1)+'%';
+
+  const lblMonth=document.getElementById('dd-kpi-month-label');
+  if (fi==null){
+    lblMonth.textContent='📅 今月の売上';
+    const cm=new Date().getMonth()+1;
+    const mS=sum(dimYear.filter(r=>r.month===cm),'sales');
+    const mAll=sum(allData.filter(r=>r.month===cm),'sales');
+    const mShare=mAll?mS/mAll*100:0;
+    document.getElementById('dd-kpi-month').textContent=fmt(mS);
+    document.getElementById('dd-kpi-month-sub').textContent='今月シェア: '+mShare.toFixed(1)+'%';
+    document.getElementById('dd-pb-month').style.width=Math.min(mShare,100)+'%';
+    document.getElementById('dd-pb-month-pct').textContent=mShare.toFixed(1)+'%';
+  } else {
+    lblMonth.textContent='📋 取引件数';
+    const yc=dimYear.length;
+    const cp=yc?dimData.length/yc*100:0;
+    document.getElementById('dd-kpi-month').textContent=dimData.length+'件';
+    document.getElementById('dd-kpi-month-sub').textContent=FM_LABELS[fi]+'の取引';
+    document.getElementById('dd-pb-month').style.width=Math.min(cp,100)+'%';
+    document.getElementById('dd-pb-month-pct').textContent='年間の '+cp.toFixed(0)+'%';
+  }
+
+  const sSales=mkMonthArr(dimYear,'sales');
+  const sGP=mkMonthArr(dimYear,'gp');
+  const baseS='rgba(0,102,204,0.75)', baseG='rgba(0,168,107,0.75)';
+  const fadeS='rgba(0,102,204,0.18)', fadeG='rgba(0,168,107,0.18)';
+  const colS=fi==null?baseS:sSales.map((_,i)=>i===fi?baseS:fadeS);
+  const colG=fi==null?baseG:sGP.map((_,i)=>i===fi?baseG:fadeG);
+  if (S.charts.dimDetailMonthly) S.charts.dimDetailMonthly.destroy();
+  S.charts.dimDetailMonthly=new Chart(document.getElementById('chartDimDetailMonthly').getContext('2d'),{
+    data:{labels:FM_LABELS, datasets:[
+      {type:'bar', label:'売上', data:sSales, backgroundColor:colS, yAxisID:'y'},
+      {type:'bar', label:'粗利', data:sGP, backgroundColor:colG, yAxisID:'y'},
+    ]},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{ticks:{callback:fmtAxis}}}}
+  });
+
+  const nowFI=cm2fi(new Date().getMonth()+1);
+  const isCFY=S.year===currentFiscalYear();
+  const yTotalSales=sum(dimYear,'sales'), yTotalGP=sum(dimYear,'gp');
+  document.getElementById('tblDimDetailMonthly').innerHTML =
+    Array.from({length:12},(_,i)=>{
+      const md=dimYear.filter(r=>r.month===fm2cm(i));
+      const sv=sum(md,'sales'), gv=sum(md,'gp'), cnt=md.length;
+      const gprM=sv?gv/sv*100:0;
+      let style='';
+      if(fi!=null) style=i===fi?'background:#eef4ff;font-weight:700;':'opacity:0.4;';
+      else if(isCFY&&i>nowFI) style='opacity:0.4;';
+      return `<tr style="${style}"><td><b>${FM_LABELS[i]}</b></td><td class="text-right">${sv?fmt(sv):'-'}</td><td class="text-right">${gv?fmt(gv):'-'}</td><td class="text-right">${sv?gprM.toFixed(1)+'%':'-'}</td><td class="text-right">${cnt||'-'}</td></tr>`;
+    }).join('') +
+    `<tr class="summary-row"><td>合計</td><td class="text-right">${fmt(yTotalSales)}</td><td class="text-right">${yTotalGP?fmt(yTotalGP):'-'}</td><td class="text-right">${yTotalSales?(yTotalGP/yTotalSales*100).toFixed(1)+'%':'-'}</td><td class="text-right">${dimYear.length}</td></tr>`;
+
+  renderDimProducts(dimData);
+
+  const cy={};
+  S.rows.filter(r=>dimValOf(r)===name).forEach(r=>{ const fy=fyOf(r); if(!cy[fy])cy[fy]={sales:0,gp:0,cnt:0}; cy[fy].sales+=r.sales; cy[fy].gp+=r.gp; cy[fy].cnt++; });
+  const cyArr=Object.entries(cy).map(([y,v])=>[+y,v]).sort((a,b)=>a[0]-b[0]);
+  document.getElementById('dimDetailYearTitle').textContent=name+'　年度別 売上・粗利 推移';
+  if (S.charts.dimDetailYearly) S.charts.dimDetailYearly.destroy();
+  S.charts.dimDetailYearly=new Chart(document.getElementById('chartDimDetailYearly').getContext('2d'),{
+    data:{labels:cyArr.map(([y])=>y+'年度'), datasets:[
+      {type:'bar', label:'売上', data:cyArr.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)'},
+      {type:'bar', label:'粗利', data:cyArr.map(([,v])=>v.gp), backgroundColor:'rgba(0,168,107,0.75)'},
+    ]},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{ticks:{callback:fmtAxis}}}}
+  });
+
+  let prevYS=null;
+  const tbl=document.getElementById('tblDimDetailYearly');
+  if (tbl){
+    tbl.innerHTML = cyArr.map(([y,v])=>{
+      const gprY=v.sales?v.gp/v.sales*100:0;
+      const yoy=(prevYS!==null&&prevYS>0)?(v.sales-prevYS)/prevYS*100:null;
+      prevYS=v.sales;
+      const yoyCell=yoy!==null?`<span style="color:${yoy>=0?'#166534':'#991b1b'};font-weight:700;">${yoy>=0?'+':''}${yoy.toFixed(1)}%</span>`:'<span style="color:#aaa;">—</span>';
+      const isSel=(y===S.year);
+      return `<tr style="${isSel?'background:#eef4ff;font-weight:700;':''}"><td><b>${y}年度</b>${isSel?' <span style="font-size:10px;color:#0066cc;background:#dbeafe;padding:1px 6px;border-radius:4px;">選択中</span>':''}</td><td class="text-right">${fmt(v.sales)}</td><td class="text-right">${yoyCell}</td><td class="text-right">${v.gp?fmt(v.gp):'-'}</td><td class="text-right">${v.sales?gprY.toFixed(1)+'%':'-'}</td><td class="text-right">${v.cnt||'-'}</td></tr>`;
+    }).join('') +
+    (()=>{ const tS=cyArr.reduce((a,[,v])=>a+v.sales,0), tG=cyArr.reduce((a,[,v])=>a+v.gp,0), tC=cyArr.reduce((a,[,v])=>a+v.cnt,0);
+      return `<tr class="summary-row"><td>全期間合計</td><td class="text-right">${fmt(tS)}</td><td class="text-right">—</td><td class="text-right">${tG?fmt(tG):'-'}</td><td class="text-right">${tS?(tG/tS*100).toFixed(1)+'%':'-'}</td><td class="text-right">${tC}</td></tr>`; })();
+  }
+}
+
+function backToList() {
+  document.getElementById('custDetailView').style.display = 'none';
+  document.getElementById('custListView').style.display   = 'block';
+}
+
+function updateCustNav() {
+  const total   = S.custList.length;
+  const idx     = S.custIdx;
+  const counter = document.getElementById('custNavCounter');
+  const btnPrev = document.getElementById('btnPrevCust');
+  const btnNext = document.getElementById('btnNextCust');
+  if (counter) counter.textContent = (idx + 1) + ' / ' + total;
+  if (btnPrev) btnPrev.disabled = idx <= 0;
+  if (btnNext) btnNext.disabled = idx >= total - 1;
+}
+
+function prevCustomer() {
+  if (S.custIdx > 0) {
+    S.custIdx--;
+    showCustomerDetail(S.custList[S.custIdx]);
+  }
+}
+
+function nextCustomer() {
+  if (S.custIdx < S.custList.length - 1) {
+    S.custIdx++;
+    showCustomerDetail(S.custList[S.custIdx]);
+  }
+}
+
+// ================================================================
+// 得意先メモ
+// ================================================================
+function loadCustMemo(name) {
+  const key = 'custMemo_' + name;
+  const val = (() => { try { return localStorage.getItem(key) || ''; } catch(e){ return S.memos[name]||''; } })();
+  S.memos[name] = val;
+  const el = document.getElementById('custMemo');
+  if (el) el.value = val;
+  const badge = document.getElementById('memoSavedBadge');
+  if (badge) badge.style.opacity = '0';
+}
+
+// 比較表セル用メモ（得意先詳細メモと同じ保存先を共有）
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+function getCustMemo(name){ try { return localStorage.getItem('custMemo_'+name) || ''; } catch(e){ return (S.memos && S.memos[name]) || ''; } }
+function saveMatrixMemo(el){
+  const name = el.dataset.cust; if (name == null) return;
+  S.memos[name] = el.value;
+  try { localStorage.setItem('custMemo_'+name, el.value); } catch(e){}
+}
+
+let memoTimer;
+function saveCustMemo() {
+  const name = S.custList[S.custIdx];
+  if (!name) return;
+  const val = document.getElementById('custMemo').value;
+  S.memos[name] = val;
+  try { localStorage.setItem('custMemo_' + name, val); } catch(e){}
+  const badge = document.getElementById('memoSavedBadge');
+  if (badge) {
+    badge.style.opacity = '1';
+    clearTimeout(memoTimer);
+    memoTimer = setTimeout(() => badge.style.opacity = '0', 1800);
+  }
+}
+
+// ================================================================
+// 日別 分析
+// ================================================================
+function buildDaySel() {
+  const sel = document.getElementById('daySel');
+  if (!sel) return;
+  const data = filtered();
+  const cmNow = new Date().getMonth()+1;
+  let defaultFi = null;
+  const opts = [];
+  for (let fi=0; fi<12; fi++) {
+    const calM = fm2cm(fi);
+    const has = data.some(r => r.month === calM);
+    opts.push(`<option value="${fi}"${has?'':' disabled'}>${FM_LABELS[fi]}${has?'':'（データなし）'}</option>`);
+  }
+  if (S.year === currentFiscalYear() && data.some(r => r.month === cmNow)) {
+    defaultFi = cm2fi(cmNow);
+  } else {
+    for (let fi=11; fi>=0; fi--) { if (data.some(r=>r.month===fm2cm(fi))) { defaultFi=fi; break; } }
+  }
+  sel.innerHTML = opts.join('');
+  if (defaultFi != null) { sel.value = defaultFi; S.dailyFi = defaultFi; }
+}
+
+function renderDaily() {
+  const empty = document.getElementById('dailyEmpty');
+  const content2 = document.getElementById('dailyContent');
+  if (!S.rows.length) { if(empty)empty.style.display='block'; if(content2)content2.style.display='none'; return; }
+
+  const sel = document.getElementById('daySel');
+  let fi = (sel && sel.value !== '') ? +sel.value : S.dailyFi;
+  if (fi == null || isNaN(fi)) { if(empty)empty.style.display='block'; if(content2)content2.style.display='none'; return; }
+  S.dailyFi = fi;
+
+  const calM = fm2cm(fi);
+  const calYear = calM >= 4 ? S.year : S.year + 1;
+  const daysInMonth = new Date(calYear, calM, 0).getDate();
+  const monData = filtered().filter(r => r.month === calM);
+
+  if (!monData.length) { if(empty)empty.style.display='block'; if(content2)content2.style.display='none'; return; }
+  if(empty)empty.style.display='none'; if(content2)content2.style.display='block';
+
+  document.getElementById('dailyTitle').textContent = S.year + '年度　' + FM_LABELS[fi] + '（' + calYear + '/' + calM + '）';
+
+  const dayS = Array(daysInMonth+1).fill(0);
+  const dayG = Array(daysInMonth+1).fill(0);
+  const dayC = Array(daysInMonth+1).fill(0);
+  monData.forEach(r => {
+    const d = r.date.getDate();
+    if (d>=1 && d<=daysInMonth) { dayS[d]+=r.sales; dayG[d]+=r.gp; dayC[d]++; }
+  });
+
+  const bizDays = getBusinessDaysInMonth(calYear, calM);
+  const totalBizDays = bizDays.length;
+
+  const totalSales = sum(monData,'sales');
+  const totalGP    = sum(monData,'gp');
+  const gpr  = totalSales ? totalGP/totalSales*100 : 0;
+  const cnt  = monData.length;
+  const tSales = S.targets.mSales[fi] || 0;
+
+  const now = new Date();
+  const isCurrent = (now.getFullYear()===calYear && (now.getMonth()+1)===calM);
+  const todayDate = isCurrent ? now.getDate() : daysInMonth;
+  const bizElapsed = isCurrent
+    ? bizDays.filter(d => d <= todayDate).length
+    : totalBizDays;
+  const bizRemDays = Math.max(0, totalBizDays - bizElapsed);
+
+  const pacePerDay   = totalBizDays ? tSales / totalBizDays : 0;
+  const expectedToDate = pacePerDay * bizElapsed;
+  const progressPct  = tSales ? totalSales/tSales*100 : 0;
+  const paceDiff     = totalSales - expectedToDate;
+  const remaining    = Math.max(0, tSales - totalSales);
+  const reqPerDay    = bizRemDays ? remaining / bizRemDays : 0;
+
+  const setT = (id,v)=>{const el=document.getElementById(id); if(el)el.textContent=v;};
+  const setW = (id,p)=>{const el=document.getElementById(id); if(el)el.style.width=Math.min(Math.max(p,0),100)+'%';};
+
+  setT('dy-kpi-tgt', tSales?fmt(tSales):'未設定');
+  setT('dy-kpi-tgt-sub', tSales?('日割: '+fmt(Math.round(pacePerDay))+' /日（営業日:'+totalBizDays+'日）'):'目標未設定（目標設定タブで入力）');
+  setW('dy-pb-tgt', progressPct);
+  setT('dy-pb-tgt-pct', tSales?progressPct.toFixed(1)+'%':'—');
+  setT('dy-pb-tgt-rem', tSales?('残り '+fmt(remaining)):'');
+
+  setT('dy-kpi-act', fmt(totalSales));
+  setT('dy-kpi-act-sub', '粗利: '+(totalGP?fmt(totalGP):'-')+'（'+gpr.toFixed(1)+'%）');
+  setW('dy-pb-act', progressPct);
+  setT('dy-pb-act-pct', tSales?progressPct.toFixed(1)+'% 達成':'目標未設定');
+  setT('dy-pb-act-cnt', cnt+'件');
+
+  const paceEl = document.getElementById('dy-kpi-pace');
+  if (tSales) {
+    const ahead = paceDiff >= 0;
+    setT('dy-kpi-pace', (ahead?'+':'')+fmt(paceDiff));
+    if (paceEl) paceEl.style.color = ahead ? '#00a86b' : '#ef4444';
+    setT('dy-kpi-pace-sub', isCurrent ? (bizElapsed+'営業日経過時点での目標比') : '月末時点での目標比');
+    const paceRatio = expectedToDate ? totalSales/expectedToDate*100 : 0;
+    setW('dy-pb-pace', paceRatio);
+    setT('dy-pb-pace-pct', ahead?'前倒し':'遅れ');
+    setT('dy-pb-pace-exp', 'あるべき '+fmt(Math.round(expectedToDate)));
+  } else {
+    setT('dy-kpi-pace','—'); if(paceEl)paceEl.style.color='#1a1a2e';
+    setT('dy-kpi-pace-sub','月間目標を設定すると表示');
+    setW('dy-pb-pace',0); setT('dy-pb-pace-pct','—'); setT('dy-pb-pace-exp','');
+  }
+
+  setT('dy-kpi-req', tSales?(fmt(Math.round(reqPerDay))+' /日'):'—');
+  setT('dy-kpi-req-sub', tSales?('残り '+bizRemDays+'営業日 / 1営業日あたり必要額'):'目標未設定');
+  const reqRatio = pacePerDay ? reqPerDay/pacePerDay*100 : 0;
+  setW('dy-pb-req', reqRatio);
+  setT('dy-pb-req-pct', tSales?(remaining>0?('当初ペース比 '+reqRatio.toFixed(0)+'%'):'目標達成 ✔'):'—');
+  setT('dy-pb-req-rem', tSales?('残額 '+fmt(remaining)):'');
+
+  const labels = bizDays.map(d => d + '日');
+  const cumA=[], cumT=[]; let run=0;
+  bizDays.forEach((d, idx) => {
+    run += dayS[d];
+    cumT.push(tSales ? Math.round(pacePerDay * (idx + 1)) : null);
+    if (isCurrent && d > todayDate) cumA.push(null); else cumA.push(run);
+  });
+  document.getElementById('dyCumTitle').textContent = FM_LABELS[fi] + '　累計売上 vs 目標ペース（営業日ベース）';
+  if (S.charts.dailyCum) S.charts.dailyCum.destroy();
+  S.charts.dailyCum = new Chart(document.getElementById('chartDailyCum').getContext('2d'), {
+    data:{ labels, datasets:[
+      {type:'line', label:'累計売上(実績)', data:cumA, borderColor:'#0066cc', backgroundColor:'rgba(0,102,204,0.12)',
+       borderWidth:2, pointRadius:0, fill:true, tension:0.2, spanGaps:false},
+      {type:'line', label:'目標ペース累計', data:cumT, borderColor:'#f59e0b', borderWidth:2,
+       borderDash:[5,5], pointRadius:0, fill:false, tension:0.1},
+    ]},
+    options:{responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top'}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.raw==null?'-':fmt(c.raw))}}},
+      scales:{y:{ticks:{callback:fmtAxis}}}}
+  });
+
+  if (S.charts.dailyBar) S.charts.dailyBar.destroy();
+  S.charts.dailyBar = new Chart(document.getElementById('chartDailyBar').getContext('2d'), {
+    data:{ labels, datasets:[
+      {type:'bar', label:'売上', data:bizDays.map(d=>dayS[d]), backgroundColor:'rgba(0,102,204,0.75)'},
+      {type:'bar', label:'粗利', data:bizDays.map(d=>dayG[d]), backgroundColor:'rgba(0,168,107,0.75)'},
+    ]},
+    options:{responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{ticks:{callback:fmtAxis}}}}
+  });
+
+  let run2=0;
+  const wd=['日','月','火','水','木','金','土'];
+  const rowsHtml = [];
+  bizDays.forEach((d, idx) => {
+    run2 += dayS[d];
+    const paceCum = tSales ? Math.round(pacePerDay * (idx + 1)) : 0;
+    const future = isCurrent && d > todayDate;
+    const dow = new Date(calYear, calM-1, d).getDay();
+    let paceCell='-';
+    if (tSales) {
+      const diff = run2 - paceCum;
+      const ok = diff>=0;
+      paceCell = '<span style="color:'+(ok?'#166534':'#991b1b')+';font-weight:600;">'+(ok?'+':'')+fmt(diff)+'</span>';
+    }
+    rowsHtml.push('<tr style="'+(future?'opacity:0.35;':'')+'"><td style="color:#333;font-weight:600;">'+d+'日('+wd[dow]+')</td><td class="text-right">'+(dayS[d]?fmt(dayS[d]):'-')+'</td><td class="text-right">'+(future?'-':fmt(run2))+'</td><td class="text-right">'+(tSales?fmt(paceCum):'-')+'</td><td class="text-right">'+(future?'-':paceCell)+'</td><td class="text-right">'+(dayG[d]?fmt(dayG[d]):'-')+'</td><td class="text-right">'+(dayC[d]||'-')+'</td></tr>');
+  });
+  rowsHtml.push('<tr class="summary-row"><td>合計（営業日）</td><td class="text-right">'+fmt(totalSales)+'</td><td class="text-right">'+fmt(totalSales)+'</td><td class="text-right">'+(tSales?fmt(tSales):'-')+'</td><td class="text-right">'+(tSales?((totalSales-tSales>=0?'+':'')+fmt(totalSales-tSales)):'-')+'</td><td class="text-right">'+(totalGP?fmt(totalGP):'-')+'</td><td class="text-right">'+cnt+'</td></tr>');
+  document.getElementById('tblDaily').innerHTML = rowsHtml.join('');
+}
+
+// ================================================================
+// 月別 詳細ビュー
+// ================================================================
+function showMonthDetail(fi) {
+  const calM   = fm2cm(fi);
+  const label  = FM_LABELS[fi];
+  const data   = filtered().filter(r => r.month === calM);
+  if (!data.length) return;
+
+  document.getElementById('monthListView').style.display   = 'none';
+  document.getElementById('monthDetailView').style.display = 'block';
+  document.getElementById('detailMonthName').textContent   = '📅 ' + S.year + '年度　' + label;
+  document.getElementById('mdChartTitle').textContent      = label + '　得意先別 売上';
+  document.getElementById('mdTableTitle').textContent      = label + '　得意先別 明細';
+
+  const totalSales = sum(data,'sales');
+  const totalGP    = sum(data,'gp');
+  const gpr        = totalSales ? totalGP/totalSales*100 : 0;
+  const cnt        = data.length;
+
+  const st = S.targets.mSales[fi] || 0;
+  const gt = S.targets.mGP[fi]    || 0;
+
+  const sPct = st ? Math.min(totalSales/st*100, 200) : 0;
+  document.getElementById('md-kpi-sales').textContent     = fmt(totalSales);
+  document.getElementById('md-kpi-sales-sub').textContent = st ? '目標: '+fmt(st) : '目標: 未設定';
+  document.getElementById('md-pb-sales').style.width      = Math.min(sPct,100)+'%';
+  document.getElementById('md-pb-sales-pct').textContent  = st ? sPct.toFixed(1)+'%' : '—';
+  document.getElementById('md-pb-sales-rem').textContent  = st ? '残り '+fmt(Math.max(0,st-totalSales)) : '';
+
+  const gPct = gt ? Math.min(totalGP/gt*100, 200) : 0;
+  document.getElementById('md-kpi-gp').textContent        = fmt(totalGP);
+  document.getElementById('md-kpi-gp-sub').textContent    = gt ? '目標: '+fmt(gt) : '目標: 未設定';
+  document.getElementById('md-pb-gp').style.width         = Math.min(gPct,100)+'%';
+  document.getElementById('md-pb-gp-pct').textContent     = gt ? gPct.toFixed(1)+'%' : '—';
+  document.getElementById('md-pb-gp-rem').textContent     = gt ? '残り '+fmt(Math.max(0,gt-totalGP)) : '';
+
+  const avgGPR = (() => { const d=filtered(); const s=sum(d,'sales'); return s?(sum(d,'gp')/s*100):0; })();
+  document.getElementById('md-kpi-gpr').textContent       = gpr.toFixed(1)+'%';
+  document.getElementById('md-kpi-gpr-sub').textContent   = '年度平均: '+avgGPR.toFixed(1)+'%';
+  document.getElementById('md-pb-gpr').style.width        = Math.min(gpr,100)+'%';
+  document.getElementById('md-pb-gpr-pct').textContent    = gpr.toFixed(1)+'%';
+
+  const avgCnt = (() => {
+    const months = Array.from({length:12},(_,i)=>filtered().filter(r=>r.month===fm2cm(i)).length);
+    const active = months.filter(n=>n>0);
+    return active.length ? active.reduce((a,b)=>a+b,0)/active.length : 0;
+  })();
+  const cntPct = avgCnt ? Math.min(cnt/avgCnt*100, 200) : 0;
+  document.getElementById('md-kpi-cnt').textContent       = cnt+'件';
+  document.getElementById('md-kpi-cnt-sub').textContent   = '月平均: '+Math.round(avgCnt)+'件';
+  document.getElementById('md-pb-cnt').style.width        = Math.min(cntPct,100)+'%';
+  document.getElementById('md-pb-cnt-pct').textContent    = avgCnt ? (cnt/avgCnt*100).toFixed(0)+'%（月平均比）' : '—';
+
+  const cm = custMap(data);
+  const top10 = cm.slice(0,10);
+  const top9  = cm.slice(0,9);
+  const rest  = cm.slice(9).reduce((s,[,v])=>s+v.sales,0);
+  const pieData = [...top9];
+  if (rest>0) pieData.push(['その他',{sales:rest,gp:0,cnt:0}]);
+
+  if (S.charts.mdCustBar) S.charts.mdCustBar.destroy();
+  S.charts.mdCustBar = new Chart(
+    document.getElementById('chartMdCustBar').getContext('2d'), {
+      type:'bar',
+      data:{
+        labels: top10.map(([k])=>k.length>14?k.slice(0,14)+'…':k),
+        datasets:[
+          {label:'売上',   data:top10.map(([,v])=>v.sales), backgroundColor:'rgba(0,102,204,0.75)'},
+          {label:'粗利額', data:top10.map(([,v])=>v.gp),    backgroundColor:'rgba(0,168,107,0.75)'},
+        ]
+      },
+      options:{indexAxis:'y', responsive:true,
+        plugins:{legend:{position:'top'}},
+        scales:{x:{ticks:{callback:fmtAxis}}}}
+    }
+  );
+
+  if (S.charts.mdCustPie) S.charts.mdCustPie.destroy();
+  S.charts.mdCustPie = new Chart(
+    document.getElementById('chartMdCustPie').getContext('2d'), {
+      type:'doughnut',
+      data:{
+        labels: pieData.map(([k])=>k),
+        datasets:[{data:pieData.map(([,v])=>v.sales), backgroundColor:COLORS}]
+      },
+      options:{responsive:true,
+        plugins:{
+          legend:{position:'right',labels:{font:{size:11}}},
+          tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.raw)}}
+        }}
+    }
+  );
+
+  document.getElementById('tblMdCust').innerHTML = cm.map(([name,d],i)=>{
+    const gprC=d.sales?d.gp/d.sales*100:0;
+    const share=totalSales?d.sales/totalSales*100:0;
+    return `<tr>
+      <td>${i+1}</td>
+      <td><b>${name}</b></td>
+      <td class="text-right">${fmt(d.sales)}</td>
+      <td class="text-right">${share.toFixed(1)}%</td>
+      <td class="text-right">${d.gp?fmt(d.gp):'-'}</td>
+      <td class="text-right">${d.gp?gprC.toFixed(1)+'%':'-'}</td>
+      <td class="text-right">${d.cnt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function backToMonthList() {
+  document.getElementById('monthDetailView').style.display = 'none';
+  document.getElementById('monthListView').style.display   = 'block';
+}
+
+// ================================================================
+// TARGETS / SETTINGS（年度別）
+// ================================================================
+function defaultTargets() {
+  return { aSales:0, aGP:0, aGPR:0, mSales:Array(12).fill(0), mGP:Array(12).fill(0) };
+}
+
+function targetsFor(year) {
+  if (!S.targetsByYear[year]) S.targetsByYear[year] = defaultTargets();
+  const t = S.targetsByYear[year];
+  if (!Array.isArray(t.mSales) || t.mSales.length !== 12) t.mSales = Array(12).fill(0);
+  if (!Array.isArray(t.mGP)    || t.mGP.length    !== 12) t.mGP    = Array(12).fill(0);
+  if (typeof t.aSales !== 'number') t.aSales = +t.aSales || 0;
+  if (typeof t.aGP    !== 'number') t.aGP    = +t.aGP    || 0;
+  if (typeof t.aGPR   !== 'number') t.aGPR   = +t.aGPR   || 0;
+  return t;
+}
+
+function buildSettingsYearSel() {
+  const sel = document.getElementById('settingsYearSel');
+  if (!sel) return;
+  sel.innerHTML = SETTINGS_YEARS.map(y => `<option value="${y}">${y}年度</option>`).join('');
+  sel.value = SETTINGS_YEARS.includes(S.settingsYear) ? S.settingsYear : SETTINGS_YEARS[0];
+}
+
+function onSettingsYearChange() {
+  S.settingsYear = +document.getElementById('settingsYearSel').value;
+  applyTargetsToForm();
+}
+
+function updateSettingsTitles() {
+  const y = S.settingsYear + '年度';
+  ['stYearAnnual','stYearMSales','stYearMGP'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = y;
+  });
+}
+
+function applyTargetsToForm() {
+  const t = targetsFor(S.settingsYear);
+  document.getElementById('tgtAnnualSales').value = t.aSales || '';
+  document.getElementById('tgtAnnualGP').value    = t.aGP || '';
+  document.getElementById('tgtAnnualGPR').value   = t.aGPR || '';
+  buildMonthInputs();
+  updateSettingsTitles();
+}
+
+function buildMonthInputs() {
+  const t = targetsFor(S.settingsYear);
+  const months = FM_LABELS;
+  document.getElementById('mSalesGrid').innerHTML = months.map((m,i)=>`
+    <div>
+      <div class="form-label">${m}</div>
+      <input type="number" class="form-input" id="ms${i}" placeholder="0" step="100000"
+             value="${t.mSales[i]||''}" style="padding:7px 9px;font-size:12px;">
+    </div>`).join('');
+  document.getElementById('mGPGrid').innerHTML = months.map((m,i)=>`
+    <div>
+      <div class="form-label">${m}</div>
+      <input type="number" class="form-input" id="mg${i}" placeholder="0" step="100000"
+             value="${t.mGP[i]||''}" style="padding:7px 9px;font-size:12px;">
+    </div>`).join('');
+}
+
+function saveAnnual() {
+  const t = targetsFor(S.settingsYear);
+  t.aSales = +document.getElementById('tgtAnnualSales').value||0;
+  t.aGP    = +document.getElementById('tgtAnnualGP').value||0;
+  t.aGPR   = +document.getElementById('tgtAnnualGPR').value||0;
+  persist(); showToast(S.settingsYear + '年度の年間目標を保存しました ✔');
+  renderTargetCompare();
+  if (S.rows.length) render();
+}
+
+function saveMonthSales() {
+  const t = targetsFor(S.settingsYear);
+  for(let i=0;i<12;i++) t.mSales[i]=+document.getElementById('ms'+i).value||0;
+  persist(); showToast(S.settingsYear + '年度の月別売上目標を保存しました ✔');
+  renderTargetCompare();
+  if (S.rows.length) render();
+}
+
+function saveMonthGP() {
+  const t = targetsFor(S.settingsYear);
+  for(let i=0;i<12;i++) t.mGP[i]=+document.getElementById('mg'+i).value||0;
+  persist(); showToast(S.settingsYear + '年度の月別粗利目標を保存しました ✔');
+  renderTargetCompare();
+  if (S.rows.length) render();
+}
+
+function distributeEvenly() {
+  const t = targetsFor(S.settingsYear);
+  const a = t.aSales || +document.getElementById('tgtAnnualSales').value||0;
+  if (!a) { alert('先に年間売上目標を入力してください。'); return; }
+  const m = Math.round(a/12);
+  for(let i=0;i<12;i++) document.getElementById('ms'+i).value = m;
+}
+
+function renderTargetCompare() {
+  const head = document.getElementById('tgtCompareHead');
+  const body = document.getElementById('tgtCompareBody');
+  if (!head || !body) return;
+  const years = SETTINGS_YEARS;
+
+  head.innerHTML = `<tr><th>項目</th>${years.map(y=>`<th class="text-right">${y}年度</th>`).join('')}</tr>`;
+
+  const rowsDef = [
+    {label:'📦 年間売上目標',       get:t=>t.aSales, fmt:v=>v?fmt(v):'-'},
+    {label:'💰 年間粗利目標',       get:t=>t.aGP,    fmt:v=>v?fmt(v):'-'},
+    {label:'📊 目標粗利率',         get:t=>t.aGPR,   fmt:v=>v?v.toFixed(1)+'%':'-'},
+    {label:'📅 月別売上目標 合計',  get:t=>t.mSales.reduce((a,b)=>a+(+b||0),0), fmt:v=>v?fmt(v):'-'},
+    {label:'📅 月別粗利目標 合計',  get:t=>t.mGP.reduce((a,b)=>a+(+b||0),0),    fmt:v=>v?fmt(v):'-'},
+  ];
+
+  body.innerHTML = rowsDef.map(rd => {
+    const cells = years.map(y => {
+      const t   = targetsFor(y);
+      const cur = (y === S.settingsYear) ? 'background:#eef4ff;font-weight:700;' : '';
+      return `<td class="text-right" style="${cur}">${rd.fmt(rd.get(t))}</td>`;
+    }).join('');
+    return `<tr><td><b>${rd.label}</b></td>${cells}</tr>`;
+  }).join('');
+
+  const cv = document.getElementById('chartTargetCompare');
+  if (cv) {
+    if (S.charts.targetCompare) S.charts.targetCompare.destroy();
+    S.charts.targetCompare = new Chart(cv.getContext('2d'), {
+      data: {
+        labels: years.map(y => y + '年度'),
+        datasets: [
+          {type:'bar',  label:'年間売上目標', data:years.map(y=>targetsFor(y).aSales||0), backgroundColor:'rgba(0,102,204,0.75)', yAxisID:'y'},
+          {type:'bar',  label:'年間粗利目標', data:years.map(y=>targetsFor(y).aGP||0),    backgroundColor:'rgba(0,168,107,0.75)', yAxisID:'y'},
+          {type:'line', label:'目標粗利率(%)', data:years.map(y=>targetsFor(y).aGPR||0),
+            borderColor:'#7c3aed', borderWidth:2, pointRadius:4, fill:false, tension:0.3, yAxisID:'y1'},
+        ]
+      },
+      options:{responsive:true, plugins:{legend:{position:'top'}},
+        scales:{ y:{ticks:{callback:fmtAxis}}, y1:{position:'right', grid:{drawOnChartArea:false}, ticks:{callback:v=>v+'%'}} }}
+    });
+  }
+}
+
+function persist() {
+  try { localStorage.setItem('salesDashV3', JSON.stringify(S.targetsByYear)); } catch(e){}
+}
+
+function loadTargets() {
+  S.targetsByYear = {};
+  try {
+    const v3 = localStorage.getItem('salesDashV3');
+    if (v3) {
+      const p = JSON.parse(v3);
+      if (p && typeof p === 'object') {
+        Object.keys(p).forEach(y => {
+          const o = p[y] || {};
+          S.targetsByYear[y] = {
+            aSales: +o.aSales || 0,
+            aGP:    +o.aGP    || 0,
+            aGPR:   +o.aGPR   || 0,
+            mSales: (Array.isArray(o.mSales) && o.mSales.length===12) ? o.mSales.map(n=>+n||0) : Array(12).fill(0),
+            mGP:    (Array.isArray(o.mGP)    && o.mGP.length===12)    ? o.mGP.map(n=>+n||0)    : Array(12).fill(0),
+          };
+        });
+      }
+    } else {
+      const v2 = localStorage.getItem('salesDashV2');
+      if (v2) {
+        const p = JSON.parse(v2) || {};
+        const cfy = currentFiscalYear();
+        S.targetsByYear[cfy] = {
+          aSales: +p.aSales || 0,
+          aGP:    +p.aGP    || 0,
+          aGPR:   +p.aGPR   || 0,
+          mSales: (Array.isArray(p.mSales) && p.mSales.length===12) ? p.mSales.map(n=>+n||0) : Array(12).fill(0),
+          mGP:    (Array.isArray(p.mGP)    && p.mGP.length===12)    ? p.mGP.map(n=>+n||0)    : Array(12).fill(0),
+        };
+        persist();
+      }
+    }
+  } catch(e){}
+}
+
+// ================================================================
+// UTILS
+// ================================================================
+function sum(arr,key){ return arr.reduce((s,r)=>s+(r[key]||0),0); }
+
+function custMap(data) {
+  const m={};
+  data.forEach(r=>{
+    if(!m[r.cust]) m[r.cust]={sales:0,gp:0,cnt:0};
+    m[r.cust].sales+=r.sales; m[r.cust].gp+=r.gp; m[r.cust].cnt++;
+  });
+  return Object.entries(m).sort((a,b)=>b[1].sales-a[1].sales);
+}
+
+function fmt(n) {
+  if (!n && n!==0) return '-';
+  const abs=Math.abs(Math.round(n));
+  const s='¥'+abs.toLocaleString('ja-JP');
+  return n<0?'-'+s:s;
+}
+
+function fmtAxis(v) {
+  if(v>=1e8) return '¥'+(v/1e8).toFixed(1)+'億';
+  if(v>=1e6) return '¥'+(v/1e6).toFixed(1)+'M';
+  if(v>=1e3) return '¥'+(v/1e3).toFixed(0)+'K';
+  return '¥'+v;
+}
+
+function badge(pct) {
+  const cls=pct>=100?'badge-green':pct>=80?'badge-yellow':'badge-red';
+  return `<span class="badge ${cls}">${pct.toFixed(1)}%</span>`;
+}
+
+let toastTimer;
+function showToast(msg) {
+  let el=document.getElementById('toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='toast';
+    el.style.cssText='position:fixed;bottom:24px;right:24px;background:#1a1a2e;color:white;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.3);transition:opacity 0.3s;';
+    document.body.appendChild(el);
+  }
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.style.opacity='0', 2500);
+}
+
+// ================================================================
+// AI気付き（自動コメント生成）
+// ================================================================
+function renderInsights() {
+  const box = document.getElementById('insightsBody');
+  const sub = document.getElementById('insightsSub');
+  if (!box) return;
+  if (!S.rows.length) { box.innerHTML = ''; return; }
+
+  const ins = [];
+  const fy   = S.year;
+  const data = filtered();
+  const T    = S.targets;
+
+  // 意味のある得意先（全期間売上の0.5%以上）に絞ってノイズ除去
+  const totAll = sum(S.rows,'sales');
+  const custTotAll = {};
+  S.rows.forEach(r => { custTotAll[r.cust] = (custTotAll[r.cust]||0) + r.sales; });
+  const thr = totAll * 0.005;
+  const meaningful = c => (custTotAll[c]||0) >= thr;
+
+  // 得意先ごとの月次売上（連続キー year*12+month）
+  const custMon = {};
+  S.rows.forEach(r => {
+    const k = r.year*12 + (r.month-1);
+    (custMon[r.cust] = custMon[r.cust] || {});
+    custMon[r.cust][k] = (custMon[r.cust][k]||0) + r.sales;
+  });
+  const allKeys = S.rows.map(r => r.year*12 + (r.month-1));
+  const maxK = Math.max(...allKeys);
+  const monLabel = k => Math.floor(k/12) + '年' + ((k%12)+1) + '月';
+
+  // --- 1) 今月目標ギャップ（当年度・当月のみ）---
+  const now = new Date();
+  const cm  = now.getMonth()+1;
+  const fi  = cm2fi(cm);
+  if (fy === currentFiscalYear() && T && T.mSales && T.mSales[fi] > 0) {
+    const mSales  = sum(data.filter(r=>r.month===cm),'sales');
+    const mTgt    = T.mSales[fi];
+    const gap     = mTgt - mSales;
+    const calYear = cm >= 4 ? fy : fy+1;
+    const bizDays = getBusinessDaysInMonth(calYear, cm);
+    const today   = now.getDate();
+    const remBiz  = bizDays.filter(d => d >= today).length;
+    if (gap > 0) {
+      const per = remBiz > 0 ? Math.round(gap/remBiz) : gap;
+      ins.push({ico:'🎯', tone:'warn', text:`今月目標まであと <b>${fmt(gap)}</b>。残り${remBiz}営業日 → 1営業日あたり <b>${fmt(per)}</b> 必要`});
+    } else {
+      ins.push({ico:'🎉', tone:'good', text:`今月は目標達成済み（実績 ${fmt(mSales)} / 目標 ${fmt(mTgt)}、<b>+${fmt(-gap)}</b>）`});
+    }
+  }
+
+  // --- 2) 3か月連続 増加/減少 ---
+  const decl = [], incl = [];
+  Object.keys(custMon).forEach(c => {
+    if (!meaningful(c)) return;
+    const v = k => custMon[c][k] || 0;
+    const s0=v(maxK), s1=v(maxK-1), s2=v(maxK-2), s3=v(maxK-3);
+    if (s0>0 && s1>0 && s2>0 && s3>0) {
+      if (s3>s2 && s2>s1 && s1>s0) decl.push({c, pct:(s3-s0)/s3*100, last:s0});
+      else if (s0>s1 && s1>s2 && s2>s3) incl.push({c, pct:(s0-s3)/s3*100, last:s0});
+    }
+  });
+  decl.sort((a,b)=>b.pct-a.pct);
+  incl.sort((a,b)=>b.pct-a.pct);
+  decl.slice(0,3).forEach(d => ins.push({ico:'📉', tone:'warn', text:`<b>${d.c}</b> の売上が3か月連続で減少（直近 ${fmt(d.last)}、${d.pct.toFixed(0)}%減）`}));
+  incl.slice(0,2).forEach(d => ins.push({ico:'📈', tone:'good', text:`<b>${d.c}</b> の売上が3か月連続で増加（+${d.pct.toFixed(0)}%）`}));
+
+  // --- 3) 前年同月比 急成長/急減（直近月）---
+  const grow = [], shrink = [];
+  Object.keys(custMon).forEach(c => {
+    if (!meaningful(c)) return;
+    const cur = custMon[c][maxK]||0, prev = custMon[c][maxK-12]||0;
+    if (prev>0 && cur>0) {
+      const g = (cur-prev)/prev*100;
+      if (g >= 30) grow.push({c, g, cur});
+      else if (g <= -30) shrink.push({c, g, cur});
+    }
+  });
+  grow.sort((a,b)=>b.g-a.g);
+  shrink.sort((a,b)=>a.g-b.g);
+  grow.slice(0,3).forEach(d => ins.push({ico:'🚀', tone:'good', text:`<b>${d.c}</b> は前年同月比 <b>+${d.g.toFixed(0)}%</b> で急成長（${monLabel(maxK)} ${fmt(d.cur)}）`}));
+  shrink.slice(0,2).forEach(d => ins.push({ico:'🔻', tone:'warn', text:`<b>${d.c}</b> は前年同月比 <b>${d.g.toFixed(0)}%</b>（${monLabel(maxK)} ${fmt(d.cur)}）`}));
+
+  // --- 4) 粗利率 改善/悪化（当年度 vs 前年度）---
+  const byCF = {};
+  S.rows.forEach(r => {
+    const f = fyOf(r);
+    ((byCF[r.cust] = byCF[r.cust]||{})[f] = byCF[r.cust][f]||{s:0,g:0});
+    byCF[r.cust][f].s += r.sales; byCF[r.cust][f].g += r.gp;
+  });
+  const gprMoves = [];
+  Object.keys(byCF).forEach(c => {
+    if (!meaningful(c)) return;
+    const cur = byCF[c][fy], prev = byCF[c][fy-1];
+    if (cur && prev && cur.s>0 && prev.s>0) {
+      const diff = (cur.g/cur.s*100) - (prev.g/prev.s*100);
+      if (Math.abs(diff) >= 3) gprMoves.push({c, diff, cg:cur.g/cur.s*100});
+    }
+  });
+  gprMoves.sort((a,b)=>b.diff-a.diff);
+  gprMoves.filter(x=>x.diff>0).slice(0,2).forEach(d => ins.push({ico:'💰', tone:'good', text:`<b>${d.c}</b> は粗利率が <b>+${d.diff.toFixed(1)}pt</b> 改善（${fy}年度 ${d.cg.toFixed(1)}%）`}));
+  gprMoves.filter(x=>x.diff<0).slice(-2).reverse().forEach(d => ins.push({ico:'⚠️', tone:'warn', text:`<b>${d.c}</b> は粗利率が <b>${d.diff.toFixed(1)}pt</b> 悪化（${fy}年度 ${d.cg.toFixed(1)}%）`}));
+
+  const shown = ins.slice(0, 8);
+  if (sub) sub.textContent = '自動分析：' + (shown.length ? shown.length + '件の注目ポイント' : '直近データより');
+  box.innerHTML = shown.length
+    ? shown.map(i => `<div class="insight-item insight-${i.tone}"><span class="insight-ico">${i.ico}</span><span>${i.text}</span></div>`).join('')
+    : '<div style="color:#888;font-size:13px;">目立った変化は検出されませんでした。データや目標設定が増えると気付きが表示されます。</div>';
+}
+
+// ================================================================
+// ドリルダウン：型式（商品）別 内訳 → 明細（得意先詳細）
+// ================================================================
+function renderCustProducts(custData){
+  const body = document.getElementById('tblCustProd');
+  if (!body) return;
+  const noCol = document.getElementById('custProdNoCol');
+  const hasProd = S.rows.some(r => r.product && r.product !== '');
+  if (noCol) noCol.style.display = hasProd ? 'none' : 'block';
+
+  const m = {};
+  custData.forEach(r => {
+    const k = r.product || '（型式なし）';
+    if (!m[k]) m[k] = {sales:0, gp:0, cnt:0};
+    m[k].sales += r.sales; m[k].gp += r.gp; m[k].cnt++;
+  });
+  const arr = Object.entries(m).sort((a,b)=>b[1].sales-a[1].sales);
+  const tSales = sum(custData,'sales');
+  S._custProdData  = custData;
+  S._custProdNames = arr.map(([n])=>n);
+
+  body.innerHTML = arr.map(([name,d],i)=>{
+    const gpr   = d.sales ? d.gp/d.sales*100 : 0;
+    const share = tSales ? d.sales/tSales*100 : 0;
+    const dn    = String(name).toLowerCase();
+    return `<tr class="custprod-row" data-n="${dn}" style="cursor:pointer;" onclick="toggleCustProduct(${i})">
+        <td>${i+1}</td>
+        <td><b>${name}</b></td>
+        <td class="text-right">${fmt(d.sales)}</td>
+        <td class="text-right">${share.toFixed(1)}%</td>
+        <td class="text-right">${d.gp?fmt(d.gp):'-'}</td>
+        <td class="text-right">${d.gp?gpr.toFixed(1)+'%':'-'}</td>
+        <td class="text-right">${d.cnt}</td>
+        <td style="color:#0066cc;font-weight:700;" id="cp-arrow-${i}">▸</td>
+      </tr>
+      <tr class="custprod-detail" id="cp-det-${i}" data-n="${dn}" style="display:none;">
+        <td colspan="8" style="background:#f8f9ff;padding:0;"><div id="cp-box-${i}"></div></td>
+      </tr>`;
+  }).join('');
+  if (!arr.length) body.innerHTML = '<tr><td colspan="8" style="color:#888;text-align:center;padding:18px;">この条件のデータがありません</td></tr>';
+}
+
+function filterCustProducts(q){
+  q = (q||'').toLowerCase();
+  document.querySelectorAll('#tblCustProd tr.custprod-row').forEach(r=>{
+    const show = (r.dataset.n||'').includes(q);
+    r.style.display = show ? '' : 'none';
+    const det = r.nextElementSibling;
+    if (det && det.classList.contains('custprod-detail') && !show) det.style.display = 'none';
+  });
+}
+
+function toggleCustProduct(i){
+  const det = document.getElementById('cp-det-'+i);
+  const arrow = document.getElementById('cp-arrow-'+i);
+  if (!det) return;
+  if (det.style.display !== 'none') { det.style.display='none'; if(arrow)arrow.textContent='▸'; return; }
+  const name = (S._custProdNames||[])[i];
+  const rows = (S._custProdData||[]).filter(r => (r.product||'（型式なし）')===name)
+                                    .sort((a,b)=> b.date - a.date);
+  const box = document.getElementById('cp-box-'+i);
+  const tS = sum(rows,'sales'), tG = sum(rows,'gp');
+  box.innerHTML = `<div style="padding:11px 15px;">
+      <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:7px;">📄 ${name}　明細　${rows.length}件（売上 ${fmt(tS)} / 粗利 ${tG?fmt(tG):'-'}）</div>
+      <table style="font-size:12px;">
+        <thead><tr>
+          <th>日付</th><th>メーカー</th>
+          <th class="text-right">売上</th><th class="text-right">粗利</th><th class="text-right">粗利率</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r=>{
+            const g = r.sales ? r.gp/r.sales*100 : 0;
+            const dt = r.date ? (r.date.getFullYear()+'/'+(r.date.getMonth()+1)+'/'+r.date.getDate()) : (r.year+'/'+r.month);
+            const mk = r.makerName || r.maker || '-';
+            return `<tr><td>${dt}</td><td>${mk}</td><td class="text-right">${fmt(r.sales)}</td><td class="text-right">${r.gp?fmt(r.gp):'-'}</td><td class="text-right">${r.sales?g.toFixed(1)+'%':'-'}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  det.style.display = '';
+  if (arrow) arrow.textContent = '▾';
+}
+
+// ================================================================
+// ドリルダウン：商品別 内訳 → 明細（伝票行）
+// ================================================================
+function renderDimProducts(dimData){
+  const body = document.getElementById('tblDimProducts');
+  if (!body) return;
+  const noCol = document.getElementById('dimProdNoCol');
+  const hasProd = S.rows.some(r => r.product && r.product !== '');
+  if (noCol) noCol.style.display = hasProd ? 'none' : 'block';
+
+  const m = {};
+  dimData.forEach(r => {
+    const k = r.product || '（商品名なし）';
+    if (!m[k]) m[k] = {sales:0, gp:0, cnt:0};
+    m[k].sales += r.sales; m[k].gp += r.gp; m[k].cnt++;
+  });
+  const arr = Object.entries(m).sort((a,b)=>b[1].sales-a[1].sales);
+  const tSales = sum(dimData,'sales');
+  S._dimProdData  = dimData;
+  S._dimProdNames = arr.map(([n])=>n);
+
+  body.innerHTML = arr.map(([name,d],i)=>{
+    const gpr   = d.sales ? d.gp/d.sales*100 : 0;
+    const share = tSales ? d.sales/tSales*100 : 0;
+    const dn    = String(name).toLowerCase();
+    return `<tr class="dimprod-row" data-n="${dn}" style="cursor:pointer;" onclick="toggleDimProduct(${i})">
+        <td>${i+1}</td>
+        <td><b>${name}</b></td>
+        <td class="text-right">${fmt(d.sales)}</td>
+        <td class="text-right">${share.toFixed(1)}%</td>
+        <td class="text-right">${d.gp?fmt(d.gp):'-'}</td>
+        <td class="text-right">${d.gp?gpr.toFixed(1)+'%':'-'}</td>
+        <td class="text-right">${d.cnt}</td>
+        <td style="color:#0066cc;font-weight:700;" id="dp-arrow-${i}">▸</td>
+      </tr>
+      <tr class="dimprod-detail" id="dp-det-${i}" data-n="${dn}" style="display:none;">
+        <td colspan="8" style="background:#f8f9ff;padding:0;"><div id="dp-box-${i}"></div></td>
+      </tr>`;
+  }).join('');
+  if (!arr.length) body.innerHTML = '<tr><td colspan="8" style="color:#888;text-align:center;padding:18px;">この条件のデータがありません</td></tr>';
+}
+
+function filterDimProducts(q){
+  q = (q||'').toLowerCase();
+  document.querySelectorAll('#tblDimProducts tr.dimprod-row').forEach(r=>{
+    const show = (r.dataset.n||'').includes(q);
+    r.style.display = show ? '' : 'none';
+    const det = r.nextElementSibling;
+    if (det && det.classList.contains('dimprod-detail') && !show) det.style.display = 'none';
+  });
+}
+
+function toggleDimProduct(i){
+  const det = document.getElementById('dp-det-'+i);
+  const arrow = document.getElementById('dp-arrow-'+i);
+  if (!det) return;
+  if (det.style.display !== 'none') { det.style.display='none'; if(arrow)arrow.textContent='▸'; return; }
+  const name = (S._dimProdNames||[])[i];
+  const rows = (S._dimProdData||[]).filter(r => (r.product||'（商品名なし）')===name)
+                                   .sort((a,b)=> b.date - a.date);
+  const box = document.getElementById('dp-box-'+i);
+  const tS = sum(rows,'sales'), tG = sum(rows,'gp');
+  box.innerHTML = `<div style="padding:11px 15px;">
+      <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:7px;">📄 ${name}　明細　${rows.length}件（売上 ${fmt(tS)} / 粗利 ${tG?fmt(tG):'-'}）</div>
+      <table style="font-size:12px;">
+        <thead><tr>
+          <th>日付</th><th>得意先</th>
+          <th class="text-right">売上</th><th class="text-right">粗利</th><th class="text-right">粗利率</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r=>{
+            const g = r.sales ? r.gp/r.sales*100 : 0;
+            const dt = r.date ? (r.date.getFullYear()+'/'+(r.date.getMonth()+1)+'/'+r.date.getDate()) : (r.year+'/'+r.month);
+            return `<tr><td>${dt}</td><td>${r.cust}</td><td class="text-right">${fmt(r.sales)}</td><td class="text-right">${r.gp?fmt(r.gp):'-'}</td><td class="text-right">${r.sales?g.toFixed(1)+'%':'-'}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  det.style.display = '';
+  if (arrow) arrow.textContent = '▾';
+}
+
+// ================================================================
+init();
+</script>
+<script>
+/* iPhone等でCDNが読めなかった場合に原因を可視化 */
+(function(){
+  function check(){
+    var miss=[];
+    if(typeof XLSX==='undefined') miss.push('XLSX(SheetJS)');
+    if(typeof Chart==='undefined') miss.push('Chart.js');
+    if(miss.length){
+      var b=document.createElement('div');
+      b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#b91c1c;color:#fff;padding:10px 14px;font:13px/1.5 sans-serif;text-align:center;';
+      b.textContent='\u26A0 \u5FC5\u8981\u306A\u30E9\u30A4\u30D6\u30E9\u30EA('+miss.join(', ')+')\u3092\u8AAD\u307F\u8FBC\u3081\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30A4\u30F3\u30BF\u30FC\u30CD\u30C3\u30C8\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u518D\u8AAD\u307F\u8FBC\u307F\u3057\u3066\u304F\u3060\u3055\u3044\u3002';
+      document.body.appendChild(b);
+    }
+  }
+  if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',check);
+  else check();
+})();
+</script>
+</body>
+</html>
