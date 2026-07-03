@@ -317,9 +317,62 @@ th,td{ padding:7px 9px; }
 .insight-good { border-left-color:#00a86b; }
 .insight-warn { border-left-color:#ef4444; }
 .insight-info { border-left-color:#0066cc; }
+
+/* ---- ログイン認証ゲート ---- */
+#authGate{
+  position:fixed; inset:0; z-index:100000;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);
+}
+#authGate.hidden{ display:none; }
+.auth-box{
+  background:#fff; border-radius:18px; padding:32px 26px 24px; width:100%; max-width:340px;
+  box-shadow:0 14px 44px rgba(0,0,0,0.4); text-align:center;
+}
+.auth-logo{ font-size:42px; margin-bottom:8px; }
+.auth-title{ font-size:17px; font-weight:800; color:#1a1a2e; margin-bottom:5px; }
+.auth-sub{ font-size:12px; color:#8890a4; margin-bottom:22px; }
+.auth-input{
+  width:100%; padding:14px; border:1.5px solid #e0e4f0; border-radius:10px;
+  font-size:16px; font-family:inherit; text-align:center; letter-spacing:3px;
+  transition:border-color .2s, box-shadow .2s;
+}
+.auth-input:focus{ outline:none; border-color:#0066cc; box-shadow:0 0 0 3px rgba(0,102,204,0.12); }
+.auth-btn{
+  width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px;
+  background:#0066cc; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit;
+  transition:background .2s, transform .05s;
+}
+.auth-btn:hover{ background:#0050a3; }
+.auth-btn:active{ transform:translateY(1px); }
+.auth-err{ color:#dc2626; font-size:12px; font-weight:700; margin-top:12px; min-height:16px; }
+.auth-note{ color:#aeb4c6; font-size:11px; margin-top:16px; line-height:1.5; }
+
+/* ---- ログアウトボタン ---- */
+.logout-btn{
+  background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25); color:#fff;
+  padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;
+  font-family:inherit; white-space:nowrap; transition:background .2s;
+}
+.logout-btn:hover{ background:rgba(255,255,255,0.28); }
 </style>
 </head>
 <body>
+<!-- ===== ログイン認証ゲート ===== -->
+<div id="authGate">
+  <div class="auth-box">
+    <div class="auth-logo">🔒</div>
+    <div class="auth-title">営業売上分析ダッシュボード</div>
+    <div class="auth-sub">パスワードを入力してください</div>
+    <input type="password" class="auth-input" id="authInput" placeholder="パスワード"
+           autocomplete="current-password"
+           onkeydown="if(event.key==='Enter'){authTryLogin();}">
+    <button class="auth-btn" onclick="authTryLogin()">ログイン</button>
+    <div class="auth-err" id="authErr"></div>
+    <div class="auth-note">📱 iPhone・Android・PC 対応<br>⏰ ログインは24時間保持されます</div>
+  </div>
+</div>
+
 <div class="app-frame">
 
 <!-- ===== HEADER ===== -->
@@ -328,6 +381,7 @@ th,td{ padding:7px 9px; }
   <div class="header-right">
     <select class="year-sel" id="yearSelect" onchange="onYearChange()"></select>
     <span class="file-badge" id="fileBadge">データ未読込</span>
+    <button class="logout-btn" onclick="authLogout()">🚪 ログアウト</button>
   </div>
 </div>
 
@@ -3873,6 +3927,54 @@ init();
   }
   if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',check);
   else check();
+})();
+</script>
+<script>
+/* ===== パスワード認証（クライアントサイド簡易ゲート） ===== */
+(function(){
+  var PASSWORD = "morimiya";
+  var KEY = "salesDash_auth_expiry";
+  var TTL = 24 * 60 * 60 * 1000; // 24時間
+
+  function isAuthed(){
+    try {
+      var v = localStorage.getItem(KEY);
+      if(!v) return false;
+      return Date.now() < parseInt(v, 10);
+    } catch(e){ return false; }
+  }
+  function unlock(){
+    var gate = document.getElementById("authGate");
+    if(gate) gate.classList.add("hidden");
+    try { window.dispatchEvent(new Event("resize")); } catch(e){}
+  }
+  window.authTryLogin = function(){
+    var inp = document.getElementById("authInput");
+    var err = document.getElementById("authErr");
+    var val = inp ? inp.value : "";
+    if(val === PASSWORD){
+      try { localStorage.setItem(KEY, String(Date.now() + TTL)); } catch(e){}
+      if(err) err.textContent = "";
+      unlock();
+    } else {
+      if(err) err.textContent = "パスワードが違います";
+      if(inp){ inp.value = ""; inp.focus(); }
+    }
+  };
+  window.authLogout = function(){
+    try { localStorage.removeItem(KEY); } catch(e){}
+    location.reload();
+  };
+  function boot(){
+    if(isAuthed()){
+      unlock();
+    } else {
+      var inp = document.getElementById("authInput");
+      if(inp) inp.focus();
+    }
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 })();
 </script>
 </body>
