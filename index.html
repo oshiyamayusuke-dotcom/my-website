@@ -369,7 +369,7 @@ th,td{ padding:7px 9px; }
            onkeydown="if(event.key==='Enter'){authTryLogin();}">
     <button class="auth-btn" onclick="authTryLogin()">ログイン</button>
     <div class="auth-err" id="authErr"></div>
-    <div class="auth-note">📱 iPhone・Android・PC 対応<br>⏰ ログインは24時間保持されます</div>
+    <div class="auth-note">📱 iPhone・Android・PC 対応<br>⏰ ブラウザを閉じると再びパスワードが必要です</div>
   </div>
 </div>
 
@@ -3933,15 +3933,12 @@ init();
 /* ===== パスワード認証（クライアントサイド簡易ゲート） ===== */
 (function(){
   var PASSWORD = "morimiya";
-  var KEY = "salesDash_auth_expiry";
-  var TTL = 24 * 60 * 60 * 1000; // 24時間
+  var KEY = "salesDash_auth";
 
+  // sessionStorage を使用 → ブラウザ（タブ）を閉じると自動でログアウト
   function isAuthed(){
-    try {
-      var v = localStorage.getItem(KEY);
-      if(!v) return false;
-      return Date.now() < parseInt(v, 10);
-    } catch(e){ return false; }
+    try { return sessionStorage.getItem(KEY) === "1"; }
+    catch(e){ return false; }
   }
   function unlock(){
     var gate = document.getElementById("authGate");
@@ -3953,7 +3950,7 @@ init();
     var err = document.getElementById("authErr");
     var val = inp ? inp.value : "";
     if(val === PASSWORD){
-      try { localStorage.setItem(KEY, String(Date.now() + TTL)); } catch(e){}
+      try { sessionStorage.setItem(KEY, "1"); } catch(e){}
       if(err) err.textContent = "";
       unlock();
     } else {
@@ -3962,7 +3959,7 @@ init();
     }
   };
   window.authLogout = function(){
-    try { localStorage.removeItem(KEY); } catch(e){}
+    try { sessionStorage.removeItem(KEY); } catch(e){}
     location.reload();
   };
   function boot(){
