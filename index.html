@@ -319,54 +319,33 @@ th,td{ padding:7px 9px; }
 .insight-info { border-left-color:#0066cc; }
 
 /* ---- ログイン認証ゲート ---- */
-#authGate{
-  position:fixed; inset:0; z-index:100000;
-  display:flex; align-items:center; justify-content:center; padding:20px;
-  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);
-}
+#authGate{ position:fixed; inset:0; z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px;
+  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%); }
 #authGate.hidden{ display:none; }
-.auth-box{
-  background:#fff; border-radius:18px; padding:32px 26px 24px; width:100%; max-width:340px;
-  box-shadow:0 14px 44px rgba(0,0,0,0.4); text-align:center;
-}
+.auth-box{ background:#fff; border-radius:18px; padding:32px 26px 24px; width:100%; max-width:340px; box-shadow:0 14px 44px rgba(0,0,0,0.4); text-align:center; }
 .auth-logo{ font-size:42px; margin-bottom:8px; }
 .auth-title{ font-size:17px; font-weight:800; color:#1a1a2e; margin-bottom:5px; }
 .auth-sub{ font-size:12px; color:#8890a4; margin-bottom:22px; }
-.auth-input{
-  width:100%; padding:14px; border:1.5px solid #e0e4f0; border-radius:10px;
-  font-size:16px; font-family:inherit; text-align:center; letter-spacing:3px;
-  transition:border-color .2s, box-shadow .2s;
-}
+.auth-input{ width:100%; padding:14px; border:1.5px solid #e0e4f0; border-radius:10px; font-size:16px; font-family:inherit; text-align:center; letter-spacing:3px; transition:border-color .2s, box-shadow .2s; }
 .auth-input:focus{ outline:none; border-color:#0066cc; box-shadow:0 0 0 3px rgba(0,102,204,0.12); }
-.auth-btn{
-  width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px;
-  background:#0066cc; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit;
-  transition:background .2s, transform .05s;
-}
+.auth-btn{ width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px; background:#0066cc; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; transition:background .2s, transform .05s; }
 .auth-btn:hover{ background:#0050a3; }
 .auth-btn:active{ transform:translateY(1px); }
 .auth-err{ color:#dc2626; font-size:12px; font-weight:700; margin-top:12px; min-height:16px; }
 .auth-note{ color:#aeb4c6; font-size:11px; margin-top:16px; line-height:1.5; }
-
-/* ---- ログアウトボタン ---- */
-.logout-btn{
-  background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25); color:#fff;
-  padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;
-  font-family:inherit; white-space:nowrap; transition:background .2s;
-}
+.logout-btn{ background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; transition:background .2s; }
 .logout-btn:hover{ background:rgba(255,255,255,0.28); }
+tr.day-row{ cursor:pointer; }
+tr.day-row:hover td{ background:#eef4ff !important; }
 </style>
 </head>
 <body>
-<!-- ===== ログイン認証ゲート ===== -->
 <div id="authGate">
   <div class="auth-box">
     <div class="auth-logo">🔒</div>
     <div class="auth-title">営業売上分析ダッシュボード</div>
     <div class="auth-sub">パスワードを入力してください</div>
-    <input type="password" class="auth-input" id="authInput" placeholder="パスワード"
-           autocomplete="current-password"
-           onkeydown="if(event.key==='Enter'){authTryLogin();}">
+    <input type="password" class="auth-input" id="authInput" placeholder="パスワード" autocomplete="current-password" onkeydown="if(event.key==='Enter'){authTryLogin();}">
     <button class="auth-btn" onclick="authTryLogin()">ログイン</button>
     <div class="auth-err" id="authErr"></div>
     <div class="auth-note">📱 iPhone・Android・PC 対応<br>⏰ 3時間経過・ブラウザを閉じると再ログインが必要です</div>
@@ -713,7 +692,7 @@ th,td{ padding:7px 9px; }
 
     <!-- 日別テーブル -->
     <div class="table-card">
-      <div class="chart-title">日別 明細</div>
+      <div class="chart-title">日別 明細　<span style="font-size:12px;font-weight:400;color:#aaa;">行をクリックでその日に売れたものを表示</span></div>
       <table>
         <thead>
           <tr>
@@ -727,6 +706,29 @@ th,td{ padding:7px 9px; }
           </tr>
         </thead>
         <tbody id="tblDaily"></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" id="dayDetailCard" style="margin-top:18px;display:none;">
+      <div class="section-header" style="flex-wrap:wrap;gap:8px;">
+        <div class="chart-title" id="dayDetailTitle" style="margin-bottom:0">選択日の販売内訳</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button class="view-toggle-btn active" id="btnDayDimProduct" onclick="switchDayDim('product')">📦 型式(商品)</button>
+          <button class="view-toggle-btn" id="btnDayDimCust" onclick="switchDayDim('cust')">🏢 得意先</button>
+          <button class="view-toggle-btn" id="btnDayDimMaker" onclick="switchDayDim('maker')">🏭 メーカー</button>
+          <button class="btn-back" onclick="closeDayDetail()">✕ 閉じる</button>
+        </div>
+      </div>
+      <div id="dayDetailNoProd" style="display:none;font-size:12px;color:#7a1f1f;background:#fff4f4;border:1px solid #ef4444;border-radius:8px;padding:8px 10px;margin-bottom:8px;">型式（商品名）列がデータにありません。列マッピングで指定すると型式別に集計できます。</div>
+      <canvas id="chartDayDetail" height="120" style="margin-bottom:14px;"></canvas>
+      <table>
+        <thead><tr><th>順位</th><th id="dayDetailColName">型式</th><th class="text-right">売上金額</th><th class="text-right">構成比</th><th class="text-right">粗利</th><th class="text-right">粗利率</th><th class="text-right">件数</th></tr></thead>
+        <tbody id="tblDayDetail"></tbody>
+      </table>
+      <div class="chart-title" style="font-size:13px;margin-top:18px;margin-bottom:10px;">📋 明細（全取引）</div>
+      <table>
+        <thead><tr><th>得意先</th><th>型式(商品)</th><th>メーカー</th><th class="text-right">売上</th><th class="text-right">粗利</th><th class="text-right">粗利率</th></tr></thead>
+        <tbody id="tblDayLines"></tbody>
       </table>
     </div>
   </div>
@@ -927,6 +929,35 @@ th,td{ padding:7px 9px; }
         </thead>
         <tbody id="tblDetailMonthly"></tbody>
       </table>
+    </div>
+
+    <div class="table-card" style="margin-top:18px;">
+      <div id="custDailyListView">
+        <div class="section-header" style="flex-wrap:wrap;gap:8px;">
+          <div class="chart-title" id="custDailyTitle" style="margin-bottom:0">日別 売上</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;font-weight:700;color:#555;white-space:nowrap;">📅 月で表示</span>
+            <select class="form-input" id="custDailyMonthSel" onchange="onCustDailyMonthChange()" style="width:auto;min-width:110px;padding:7px 10px;">
+              <option value="">通年</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#aaa;margin:8px 0 10px;">日をクリックすると、その日のメーカー・型式別の内訳を表示します。</div>
+        <table>
+          <thead><tr><th>日付</th><th class="text-right">売上金額</th><th class="text-right">粗利</th><th class="text-right">粗利率</th><th class="text-right">件数</th><th></th></tr></thead>
+          <tbody id="tblCustDailyList"></tbody>
+        </table>
+      </div>
+      <div id="custDailyDetailView" style="display:none;">
+        <div class="detail-header" style="margin-bottom:14px;">
+          <button class="btn-back" onclick="backToCustDailyList()">← 日別一覧に戻る</button>
+          <div class="detail-cust-name" id="custDailyDayTitle" style="font-size:16px;"></div>
+        </div>
+        <table>
+          <thead><tr><th>メーカー</th><th>型式</th><th class="text-right">金額</th><th class="text-right">粗利</th><th class="text-right">粗利率</th><th class="text-right">件数</th></tr></thead>
+          <tbody id="tblCustDailyDetail"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- この得意先の メーカー / 品目分類別 内訳 -->
@@ -2182,6 +2213,7 @@ function renderCustDetail() {
   const cyArr = Object.entries(cy).map(([y,v]) => [+y, v]).sort((a,b)=>a[0]-b[0]);
   renderCustDimBreakdown();
   renderCustProducts(custData);
+  renderCustDaily(custData);
 
   // 月次推移（この得意先・全期間・連続タイムライン）
   const custAll = S.rows.filter(r => r.cust === name);
@@ -2260,8 +2292,91 @@ function renderCustDetail() {
 }
 
 // ================================================================
+// 得意先詳細：日別 売上（月プルダウン + ドリルダウン）
+// ================================================================
+function _custDayKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function renderCustDaily(custData){
+  const name = S.detailCust;
+  const base = filtered().filter(r => r.cust === name);
+  S._custDailyBase = base;
+  S._custDailyMonth = null;
+  const sel = document.getElementById('custDailyMonthSel');
+  if(sel){
+    let opts = ['<option value="">通年</option>'];
+    for(let i=0;i<12;i++){
+      const has = base.some(r=>r.month===fm2cm(i));
+      opts.push('<option value="'+i+'"'+(has?'':' disabled')+'>'+FM_LABELS[i]+(has?'':'（取引なし）')+'</option>');
+    }
+    sel.innerHTML = opts.join('');
+    sel.value = '';
+  }
+  _renderCustDailyList();
+}
+function onCustDailyMonthChange(){
+  const sel = document.getElementById('custDailyMonthSel');
+  S._custDailyMonth = (sel && sel.value !== '') ? +sel.value : null;
+  const listV=document.getElementById('custDailyListView'), detV=document.getElementById('custDailyDetailView');
+  if(listV) listV.style.display='block'; if(detV) detV.style.display='none';
+  _renderCustDailyList();
+}
+function _renderCustDailyList(){
+  const base = S._custDailyBase || [];
+  const mo = (S._custDailyMonth==null) ? null : S._custDailyMonth;
+  const recs = (mo==null) ? base : base.filter(r=>r.month===fm2cm(mo));
+  S._custDailyData = recs.slice();
+  const listV=document.getElementById('custDailyListView'), detV=document.getElementById('custDailyDetailView');
+  if(listV) listV.style.display='block'; if(detV) detV.style.display='none';
+  const titleEl=document.getElementById('custDailyTitle');
+  if(titleEl) titleEl.textContent=(S.detailCust||'')+'　日別 売上'+(mo!=null?'（'+FM_LABELS[mo]+'）':'（通年）');
+  const byDay={};
+  recs.forEach(r=>{ const key=_custDayKey(r.date); (byDay[key]=byDay[key]||[]).push(r); });
+  const keys=Object.keys(byDay).sort();
+  const tbody=document.getElementById('tblCustDailyList'); if(!tbody) return;
+  if(!keys.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:16px;">取引データなし</td></tr>'; return; }
+  const wd=['日','月','火','水','木','金','土'];
+  let html='',gS=0,gG=0,gC=0;
+  keys.forEach(k=>{
+    const rr=byDay[k]; const p=k.split('-'); const yy=+p[0],mm=+p[1],dd=+p[2];
+    const dow=new Date(yy,mm-1,dd).getDay();
+    const s=rr.reduce((a,r)=>a+r.sales,0), g=rr.reduce((a,r)=>a+r.gp,0), gpr=s?g/s*100:0;
+    gS+=s; gG+=g; gC+=rr.length;
+    html+='<tr class="cust-row" onclick="showCustDailyDay(\''+k+'\')"><td style="font-weight:600;white-space:nowrap;">'+mm+'/'+dd+'('+wd[dow]+')</td><td class="text-right">'+fmt(s)+'</td><td class="text-right">'+(g?fmt(g):'-')+'</td><td class="text-right">'+gpr.toFixed(1)+'%</td><td class="text-right">'+rr.length+'</td><td>›</td></tr>';
+  });
+  const ggpr=gS?gG/gS*100:0;
+  html+='<tr class="summary-row"><td>合計</td><td class="text-right">'+fmt(gS)+'</td><td class="text-right">'+(gG?fmt(gG):'-')+'</td><td class="text-right">'+ggpr.toFixed(1)+'%</td><td class="text-right">'+gC+'</td><td></td></tr>';
+  tbody.innerHTML=html;
+}
+function showCustDailyDay(key){
+  const recs=(S._custDailyData||[]).filter(r=>_custDayKey(r.date)===key);
+  const listV=document.getElementById('custDailyListView'), detV=document.getElementById('custDailyDetailView');
+  if(listV) listV.style.display='none'; if(detV) detV.style.display='block';
+  const wd=['日','月','火','水','木','金','土']; const p=key.split('-'); const yy=+p[0],mm=+p[1],dd=+p[2];
+  const dow=new Date(yy,mm-1,dd).getDay();
+  const tot=recs.reduce((a,r)=>a+r.sales,0), totG=recs.reduce((a,r)=>a+r.gp,0);
+  const t=document.getElementById('custDailyDayTitle');
+  if(t) t.textContent='📅 '+yy+'/'+mm+'/'+dd+'('+wd[dow]+')　売上 '+fmt(tot)+' ／ '+recs.length+'件';
+  const m={};
+  recs.forEach(r=>{ const mk=makerLabel(r); const pr=r.product||'（型式なし）'; const kk=mk+'\u0001'+pr; if(!m[kk]) m[kk]={maker:mk,product:pr,sales:0,gp:0,cnt:0}; m[kk].sales+=r.sales; m[kk].gp+=r.gp; m[kk].cnt++; });
+  const arr=Object.keys(m).map(x=>m[x]).sort((a,b)=>b.sales-a.sales);
+  let html=arr.map(x=>{ const gpr=x.sales?x.gp/x.sales*100:0;
+    return '<tr><td>'+escHtml(x.maker)+'</td><td>'+escHtml(x.product)+'</td><td class="text-right">'+fmt(x.sales)+'</td><td class="text-right">'+(x.gp?fmt(x.gp):'-')+'</td><td class="text-right">'+gpr.toFixed(1)+'%</td><td class="text-right">'+x.cnt+'</td></tr>'; }).join('');
+  const gpr=tot?totG/tot*100:0;
+  html+='<tr class="summary-row"><td>合計</td><td></td><td class="text-right">'+fmt(tot)+'</td><td class="text-right">'+(totG?fmt(totG):'-')+'</td><td class="text-right">'+gpr.toFixed(1)+'%</td><td class="text-right">'+recs.length+'</td></tr>';
+  const tb=document.getElementById('tblCustDailyDetail'); if(tb) tb.innerHTML=html;
+}
+function backToCustDailyList(){ const listV=document.getElementById('custDailyListView'), detV=document.getElementById('custDailyDetailView'); if(listV) listV.style.display='block'; if(detV) detV.style.display='none'; }
+
+// ================================================================
 // 得意先詳細：メーカー / 品目分類別 内訳
 // ================================================================
+function makerLabel(r){
+  const name = (r.makerName != null) ? String(r.makerName).trim() : '';
+  const code = (r.maker != null) ? String(r.maker).trim() : '';
+  const isNum = s => s !== '' && /^[-0-9.,]+$/.test(s);
+  if (name && !isNum(name)) return name;
+  if (code && !isNum(code)) return code;
+  return name || code || 'メーカー未設定';
+}
 function valForDim(r, type){
   let v;
   if (type === 'maker')   v = (r.makerName && String(r.makerName).trim()) ? r.makerName : r.maker;
@@ -3163,6 +3278,8 @@ function renderDaily() {
   const calM = fm2cm(fi);
   const calYear = calM >= 4 ? S.year : S.year + 1;
   const daysInMonth = new Date(calYear, calM, 0).getDate();
+  S._dailyCtx = { calYear, calM, fi };
+  const _ddc0 = document.getElementById('dayDetailCard'); if(_ddc0) _ddc0.style.display='none';
   const monData = filtered().filter(r => r.month === calM);
 
   if (!monData.length) { if(empty)empty.style.display='block'; if(content2)content2.style.display='none'; return; }
@@ -3284,10 +3401,54 @@ function renderDaily() {
       const ok = diff>=0;
       paceCell = '<span style="color:'+(ok?'#166534':'#991b1b')+';font-weight:600;">'+(ok?'+':'')+fmt(diff)+'</span>';
     }
-    rowsHtml.push('<tr style="'+(future?'opacity:0.35;':'')+'"><td style="color:#333;font-weight:600;">'+d+'日('+wd[dow]+')</td><td class="text-right">'+(dayS[d]?fmt(dayS[d]):'-')+'</td><td class="text-right">'+(future?'-':fmt(run2))+'</td><td class="text-right">'+(tSales?fmt(paceCum):'-')+'</td><td class="text-right">'+(future?'-':paceCell)+'</td><td class="text-right">'+(dayG[d]?fmt(dayG[d]):'-')+'</td><td class="text-right">'+(dayC[d]||'-')+'</td></tr>');
+    const _clk = dayC[d] > 0;
+    const _trTag = '<tr style="'+(future?'opacity:0.35;':'')+'"'+(_clk?' class="day-row" onclick="showDayDetail('+d+')"':'')+'>';
+    rowsHtml.push(_trTag+'<td style="color:#333;font-weight:600;">'+d+'日('+wd[dow]+')</td><td class="text-right">'+(dayS[d]?fmt(dayS[d]):'-')+'</td><td class="text-right">'+(future?'-':fmt(run2))+'</td><td class="text-right">'+(tSales?fmt(paceCum):'-')+'</td><td class="text-right">'+(future?'-':paceCell)+'</td><td class="text-right">'+(dayG[d]?fmt(dayG[d]):'-')+'</td><td class="text-right">'+(dayC[d]||'-')+'</td></tr>');
   });
   rowsHtml.push('<tr class="summary-row"><td>合計（営業日）</td><td class="text-right">'+fmt(totalSales)+'</td><td class="text-right">'+fmt(totalSales)+'</td><td class="text-right">'+(tSales?fmt(tSales):'-')+'</td><td class="text-right">'+(tSales?((totalSales-tSales>=0?'+':'')+fmt(totalSales-tSales)):'-')+'</td><td class="text-right">'+(totalGP?fmt(totalGP):'-')+'</td><td class="text-right">'+cnt+'</td></tr>');
   document.getElementById('tblDaily').innerHTML = rowsHtml.join('');
+}
+
+function showDayDetail(day){
+  const ctx=S._dailyCtx; if(!ctx) return;
+  if(!S._dayDim) S._dayDim='product';
+  const recs=filtered().filter(r=>r.month===ctx.calM && r.date.getFullYear()===ctx.calYear && r.date.getDate()===day);
+  S._dayLines=recs; S._dayInfo={day:day,calM:ctx.calM,calYear:ctx.calYear,fi:ctx.fi};
+  const card=document.getElementById('dayDetailCard'); if(card) card.style.display='block';
+  renderDayDetail();
+  if(card && card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeDayDetail(){ const c=document.getElementById('dayDetailCard'); if(c) c.style.display='none'; }
+function switchDayDim(dim){
+  S._dayDim=dim;
+  const map={product:'btnDayDimProduct',cust:'btnDayDimCust',maker:'btnDayDimMaker'};
+  Object.keys(map).forEach(k=>{ const b=document.getElementById(map[k]); if(b) b.classList.toggle('active',k===dim); });
+  renderDayDetail();
+}
+function renderDayDetail(){
+  const recs=S._dayLines||[]; const info=S._dayInfo||{}; const dim=S._dayDim||'product';
+  const wd=['日','月','火','水','木','金','土'];
+  const dow=new Date(info.calYear,info.calM-1,info.day).getDay();
+  const titleEl=document.getElementById('dayDetailTitle');
+  if(titleEl) titleEl.textContent=info.calYear+'/'+info.calM+'/'+info.day+'（'+wd[dow]+'）に売れたもの　売上 '+fmt(sum(recs,'sales'))+' ／ '+recs.length+'件';
+  const dimLabel={product:'型式',cust:'得意先',maker:'メーカー'}[dim]||'型式';
+  const colEl=document.getElementById('dayDetailColName'); if(colEl) colEl.textContent=dimLabel;
+  const hasProd=S.rows.some(r=>r.product&&r.product!=='');
+  const noProdEl=document.getElementById('dayDetailNoProd'); if(noProdEl) noProdEl.style.display=(dim==='product'&&!hasProd)?'block':'none';
+  const keyOf=r=>{ if(dim==='product') return r.product||'（型式なし）'; if(dim==='maker') return makerLabel(r); return r.cust||'不明'; };
+  const m={}; recs.forEach(r=>{ const k=keyOf(r); if(!m[k]) m[k]={sales:0,gp:0,cnt:0}; m[k].sales+=r.sales; m[k].gp+=r.gp; m[k].cnt++; });
+  const arr=Object.keys(m).map(k=>({name:k,sales:m[k].sales,gp:m[k].gp,cnt:m[k].cnt})).sort((a,b)=>b.sales-a.sales);
+  const total=arr.reduce((s,x)=>s+x.sales,0);
+  const rows=arr.map((x,i)=>{ const pct=total?x.sales/total*100:0; const gpr=x.sales?x.gp/x.sales*100:0;
+    return '<tr><td>'+(i+1)+'</td><td style="font-weight:600;">'+escHtml(x.name)+'</td><td class="text-right">'+fmt(x.sales)+'</td><td class="text-right">'+pct.toFixed(1)+'%</td><td class="text-right">'+(x.gp?fmt(x.gp):'-')+'</td><td class="text-right">'+gpr.toFixed(1)+'%</td><td class="text-right">'+x.cnt+'</td></tr>'; });
+  const tbl=document.getElementById('tblDayDetail'); if(tbl) tbl.innerHTML=rows.join('')||'<tr><td colspan="7" style="text-align:center;color:#aaa;padding:16px;">データなし</td></tr>';
+  const top=arr.slice(0,10);
+  if(S.charts.dayDetail) S.charts.dayDetail.destroy();
+  const cv=document.getElementById('chartDayDetail');
+  if(cv){ S.charts.dayDetail=new Chart(cv.getContext('2d'),{ type:'bar', data:{ labels:top.map(x=>x.name), datasets:[{label:'売上',data:top.map(x=>x.sales),backgroundColor:'rgba(0,102,204,0.75)'}] }, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'売上: '+fmt(c.raw)}}}, scales:{x:{ticks:{callback:fmtAxis}}} } }); }
+  const lines=recs.slice().sort((a,b)=>b.sales-a.sales).map(r=>{ const gpr=r.sales?r.gp/r.sales*100:0;
+    return '<tr><td>'+escHtml(r.cust||'不明')+'</td><td>'+escHtml(r.product||'-')+'</td><td>'+escHtml(makerLabel(r))+'</td><td class="text-right">'+fmt(r.sales)+'</td><td class="text-right">'+(r.gp?fmt(r.gp):'-')+'</td><td class="text-right">'+gpr.toFixed(1)+'%</td></tr>'; });
+  const tblL=document.getElementById('tblDayLines'); if(tblL) tblL.innerHTML=lines.join('')||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:16px;">データなし</td></tr>';
 }
 
 // ================================================================
@@ -3930,54 +4091,21 @@ init();
 })();
 </script>
 <script>
-/* ===== パスワード認証（クライアントサイド簡易ゲート） ===== */
 (function(){
   var PASSWORD = "morimiya";
   var KEY = "salesDash_auth_expiry";
-  var TTL = 3 * 60 * 60 * 1000; // 3時間
-
-  // sessionStorage に期限を保存 →
-  //  ・ブラウザ(タブ)を閉じるとログアウト
-  //  ・開いたままでも3時間経過で再ログインが必要
-  function isAuthed(){
-    try {
-      var v = sessionStorage.getItem(KEY);
-      if(!v) return false;
-      return Date.now() < parseInt(v, 10);
-    } catch(e){ return false; }
-  }
-  function unlock(){
-    var gate = document.getElementById("authGate");
-    if(gate) gate.classList.add("hidden");
-    try { window.dispatchEvent(new Event("resize")); } catch(e){}
-  }
+  var TTL = 3 * 60 * 60 * 1000;
+  function isAuthed(){ try { var v = sessionStorage.getItem(KEY); if(!v) return false; return Date.now() < parseInt(v,10); } catch(e){ return false; } }
+  function unlock(){ var g=document.getElementById("authGate"); if(g) g.classList.add("hidden"); try{ window.dispatchEvent(new Event("resize")); }catch(e){} }
   window.authTryLogin = function(){
-    var inp = document.getElementById("authInput");
-    var err = document.getElementById("authErr");
-    var val = inp ? inp.value : "";
-    if(val === PASSWORD){
-      try { sessionStorage.setItem(KEY, String(Date.now() + TTL)); } catch(e){}
-      if(err) err.textContent = "";
-      unlock();
-    } else {
-      if(err) err.textContent = "パスワードが違います";
-      if(inp){ inp.value = ""; inp.focus(); }
-    }
+    var inp=document.getElementById("authInput"), err=document.getElementById("authErr");
+    var val=inp?inp.value:"";
+    if(val===PASSWORD){ try{ sessionStorage.setItem(KEY,String(Date.now()+TTL)); }catch(e){} if(err)err.textContent=""; unlock(); }
+    else { if(err)err.textContent="パスワードが違います"; if(inp){ inp.value=""; inp.focus(); } }
   };
-  window.authLogout = function(){
-    try { sessionStorage.removeItem(KEY); } catch(e){}
-    location.reload();
-  };
-  function boot(){
-    if(isAuthed()){
-      unlock();
-    } else {
-      var inp = document.getElementById("authInput");
-      if(inp) inp.focus();
-    }
-  }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  window.authLogout = function(){ try{ sessionStorage.removeItem(KEY); }catch(e){} location.reload(); };
+  function boot(){ if(isAuthed()){ unlock(); } else { var inp=document.getElementById("authInput"); if(inp) inp.focus(); } }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot); else boot();
 })();
 </script>
 </body>
